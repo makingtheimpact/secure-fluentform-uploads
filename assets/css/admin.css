@@ -1,0 +1,33 @@
+.sffu-allowed-types {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    background: #fff;
+}
+
+.sffu-allowed-types label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.sffu-files-list {
+    margin-top: 20px;
+}
+
+.sffu-files-list table {
+    margin-top: 10px;
+}
+
+.sffu-files-list .button {
+    margin-right: 5px;
+}
+
+.sffu-delete-file {
+    color: #dc3232 !important;
+}
+
+.sffu-delete-file:hover {
+    color: #dc3232 !important;
+    border-color: #dc3232 !important;
+} 
