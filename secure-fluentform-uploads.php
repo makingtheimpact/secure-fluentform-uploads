@@ -13,8 +13,7 @@ define('SFFU_VERSION', '1.0');
 define('SFFU_PLUGIN_FILE', __FILE__);
 define('SFFU_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SFFU_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('SFFU_UPLOAD_DIR', WP_CONTENT_DIR . '/private-uploads/fluentform/');
-define('SFFU_CIPHER_KEY', wp_generate_password(64, true, true));
+define('SFFU_UPLOAD_DIR', WP_CONTENT_DIR . '/secure-uploads/');
 define('SFFU_FILE_EXPIRY', 7 * 24 * 60 * 60);
 define('SFFU_CLEANUP_EXPIRY', 30 * 24 * 60 * 60);
 define('SFFU_ALLOWED_MIME_TYPES', [
@@ -38,6 +37,11 @@ define('SFFU_ALLOWED_MIME_TYPES', [
 
 // Autoload classes
 spl_autoload_register(function($class) {
+    // Ensure WordPress is loaded
+    if (!function_exists('wp_get_current_user')) {
+        return;
+    }
+
     $prefix = 'SFFU_';
     $base_dir = SFFU_PLUGIN_DIR . 'includes/';
 
@@ -50,12 +54,29 @@ spl_autoload_register(function($class) {
     $file = $base_dir . 'class-' . strtolower(str_replace('_', '-', $relative_class)) . '.php';
 
     if (file_exists($file)) {
-        require $file;
+        require_once $file;
     }
 });
 
 // Initialize plugin
 function sffu_init() {
+    // Check if WordPress is fully loaded
+    if (!function_exists('wp_get_current_user')) {
+        return;
+    }
+    
+    // Check if FluentForms is active
+    if (!class_exists('FluentForm\App\Modules\Form\Form')) {
+        add_action('admin_notices', function() {
+            echo '<div class="error"><p>Secure FluentForm Uploads requires FluentForms to be installed and activated. <a href="' . 
+                 esc_url(admin_url('plugin-install.php?s=fluentform&tab=search&type=term')) . 
+                 '">Install FluentForms</a> or <a href="' . 
+                 esc_url('https://wordpress.org/plugins/fluentform/') . 
+                 '" target="_blank">get it here</a>.</p></div>';
+        });
+        return;
+    }
+    
     // Check requirements
     if (!function_exists('openssl_encrypt') || !function_exists('openssl_decrypt')) {
         add_action('admin_notices', function() {
@@ -64,12 +85,48 @@ function sffu_init() {
         return;
     }
 
+    // Define cipher key after WordPress is loaded
+    if (!defined('SFFU_CIPHER_KEY')) {
+        define('SFFU_CIPHER_KEY', wp_generate_password(64, true, true));
+    }
+
+    // Check if required classes exist
+    $required_classes = array('SFFU_Core', 'SFFU_Admin', 'SFFU_Updater');
+    $missing_classes = array();
+    
+    foreach ($required_classes as $class) {
+        if (!class_exists($class)) {
+            $missing_classes[] = $class;
+        }
+    }
+    
+    if (!empty($missing_classes)) {
+        add_action('admin_notices', function() use ($missing_classes) {
+            echo '<div class="error"><p>Secure FluentForm Uploads: The following required classes are missing: ' . 
+                 esc_html(implode(', ', $missing_classes)) . '. Please reinstall the plugin.</p></div>';
+        });
+        return;
+    }
+
     // Initialize components
-    SFFU_Core::get_instance();
-    SFFU_Admin::get_instance();
-    SFFU_Updater::get_instance();
+    try {
+        SFFU_Core::get_instance();
+        SFFU_Admin::get_instance();
+        SFFU_Updater::get_instance();
+    } catch (Exception $e) {
+        add_action('admin_notices', function() use ($e) {
+            echo '<div class="error"><p>Secure FluentForm Uploads Error: ' . esc_html($e->getMessage()) . '</p></div>';
+        });
+    }
 }
 add_action('plugins_loaded', 'sffu_init');
+
+// Add settings link to plugins page
+add_filter('plugin_action_links_' . plugin_basename(__FILE__), function($links) {
+    $settings_link = '<a href="' . admin_url('admin.php?page=secure-fluentform-uploads') . '">' . __('Settings') . '</a>';
+    array_unshift($links, $settings_link);
+    return $links;
+});
 
 // Utility function to get upload directory
 function sffu_get_upload_dir() {
@@ -78,7 +135,7 @@ function sffu_get_upload_dir() {
         $dir = trailingslashit($custom);
     } else {
         $upload = wp_upload_dir();
-        $dir = trailingslashit($upload['basedir']) . 'private-fluentform/';
+        $dir = trailingslashit($upload['basedir']) . 'fluentform-uploads/';
     }
     return $dir;
 }
@@ -115,19 +172,70 @@ register_activation_hook(__FILE__, function() {
     }
 
     // Create .htaccess
-    $htaccess = SFFU_UPLOAD_DIR . '.htaccess';
+    $upload_dir = sffu_get_upload_dir();
+    if (!file_exists($upload_dir)) {
+        if (!wp_mkdir_p($upload_dir)) {
+            add_action('admin_notices', function() {
+                echo '<div class="error"><p>Failed to create upload directory. Please check permissions.</p></div>';
+            });
+            return;
+        }
+    }
+
+    $htaccess = $upload_dir . '.htaccess';
     if (!file_exists($htaccess)) {
         file_put_contents($htaccess, "Order deny,allow\nDeny from all");
     }
 
     // Create index.php
-    $index = SFFU_UPLOAD_DIR . 'index.php';
+    $index = $upload_dir . 'index.php';
     if (!file_exists($index)) {
         file_put_contents($index, '<?php // Silence is golden');
     }
 
-    // Schedule cleanup
-    if (!wp_next_scheduled('sffu_cleanup_files')) {
-        wp_schedule_event(time(), 'daily', 'sffu_cleanup_files');
+    // Create log table
+    global $wpdb;
+    $log_table = $wpdb->prefix . 'sffu_logs';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$log_table'") != $log_table) {
+        $charset_collate = $wpdb->get_charset_collate();
+        $sql = "CREATE TABLE $log_table (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            action VARCHAR(32) NOT NULL,
+            file VARCHAR(255),
+            user_id BIGINT,
+            user_login VARCHAR(60),
+            ip VARCHAR(45),
+            time DATETIME DEFAULT CURRENT_TIMESTAMP,
+            details TEXT
+        ) $charset_collate;";
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
     }
+
+    // Create files table
+    $files_table = $wpdb->prefix . 'sffu_files';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$files_table'") != $files_table) {
+        $charset_collate = $wpdb->get_charset_collate();
+        $sql = "CREATE TABLE $files_table (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            upload_user_id BIGINT,
+            file_name VARCHAR(255) NOT NULL,
+            filename VARCHAR(255) NOT NULL,
+            original_name VARCHAR(255) NOT NULL,
+            file_path VARCHAR(255) NOT NULL,
+            mime_type VARCHAR(100),
+            file_size BIGINT,
+            encryption_key VARCHAR(255),
+            iv VARCHAR(255),
+            upload_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+            status VARCHAR(20) DEFAULT 'active'
+        ) $charset_collate;";
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+    }
+});
+
+// Add deactivation hook to clean up
+register_deactivation_hook(__FILE__, function() {
+    wp_clear_scheduled_hook('sffu_cleanup_files');
 });

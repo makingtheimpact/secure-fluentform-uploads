@@ -1,14 +1,71 @@
 .sffu-allowed-types {
-    max-height: 300px;
-    overflow-y: auto;
-    border: 1px solid #ddd;
-    padding: 10px;
-    background: #fff;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(120px, 1fr));
+    gap: 10px 20px;
+    max-width: 800px;
 }
 
 .sffu-allowed-types label {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px;
+    background: #f9f9f9;
+    border-radius: 3px;
+    min-width: 120px;
     margin-bottom: 5px;
+}
+
+.sffu-allowed-types input[type="checkbox"] {
+    margin: 0;
+}
+
+.sffu-files-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.sffu-files-table th,
+.sffu-files-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.sffu-files-table th {
+    background-color: #f4f4f4;
+    font-weight: bold;
+}
+
+.sffu-files-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.sffu-files-table tr:hover {
+    background-color: #f1f1f1;
+}
+
+.sffu-files-table .button {
+    text-decoration: none;
+    color: #0073aa;
+}
+
+.sffu-files-table .button:hover {
+    color: #005177;
+}
+
+.sffu-tabs {
+    margin-bottom: 20px;
+}
+
+.sffu-tabs .nav-tab {
+    margin-left: 0.5em;
+}
+
+.sffu-tabs .nav-tab-active {
+    background: #fff;
+    border-bottom: 1px solid #fff;
 }
 
 .sffu-files-list {

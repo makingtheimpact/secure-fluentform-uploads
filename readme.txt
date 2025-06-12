@@ -16,7 +16,7 @@ Secure FluentForm Uploads is a security enhancement plugin that works with Fluen
 = Key Features =
 
 * Moves uploaded files to a private directory outside the web root
-* Encrypts file metadata and content
+* Encrypts file metadata and content, stored with a .php extension
 * Implements secure file access controls
 * Provides admin-only access to uploaded files
 * Includes automatic file cleanup
@@ -33,6 +33,7 @@ Secure FluentForm Uploads is a security enhancement plugin that works with Fluen
 * IP-based access logging
 * Configurable file expiry
 * Automatic cleanup of expired files
+* Files stored with .php extension to prevent execution
 
 == Installation ==
 
@@ -53,7 +54,7 @@ The plugin supports a wide range of file types including images, documents, audi
 
 = How secure is the file encryption? =
 
-The plugin uses AES-256-CBC encryption for both file content and metadata, with unique encryption keys generated for each installation.
+The plugin uses AES-256-CBC encryption for both file content and metadata, with unique encryption keys generated for each installation. Files are stored with a .enc extension to prevent execution.
 
 == Screenshots ==
 

@@ -30,6 +30,20 @@ class SFFU_Encryption {
             $key = wp_generate_password(64, true, true);
             update_option('sffu_file_cipher_key', $key);
         }
+        
+        // Add key rotation check
+        $key_created = get_option('sffu_file_cipher_key_created');
+        if (!$key_created) {
+            update_option('sffu_file_cipher_key_created', time());
+        } elseif (time() - $key_created > (30 * DAY_IN_SECONDS)) {
+            // Rotate key every 30 days
+            $new_key = wp_generate_password(64, true, true);
+            update_option('sffu_file_cipher_key_previous', $key);
+            update_option('sffu_file_cipher_key', $new_key);
+            update_option('sffu_file_cipher_key_created', time());
+            $key = $new_key;
+        }
+        
         return $key;
     }
 

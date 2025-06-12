@@ -5,7 +5,7 @@ A WordPress plugin that enhances FluentForm upload security by implementing priv
 ## Features
 
 - 🔒 Moves uploads to a private directory outside web root
-- 🔐 Encrypts file metadata and content using AES-256-CBC
+- 🔐 Encrypts file metadata and content using AES-256-CBC, stored with a .php extension
 - 👮‍♂️ Implements secure file access controls
 - 👤 Admin-only access to uploaded files
 - 🧹 Automatic file cleanup
@@ -36,6 +36,7 @@ A WordPress plugin that enhances FluentForm upload security by implementing priv
 - IP-based access logging
 - Configurable file expiry
 - Automatic cleanup of expired files
+- Files stored with .php extension to prevent execution
 
 ## Configuration
 
