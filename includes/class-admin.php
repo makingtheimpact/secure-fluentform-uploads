@@ -95,6 +95,10 @@ class SFFU_Admin {
             'type' => 'boolean',
             'default' => false
         ));
+        register_setting('sffu_settings', 'sffu_delete_files_on_uninstall', array(
+            'type' => 'boolean',
+            'default' => false
+        ));
 
         add_settings_section(
             'sffu_types_section',
@@ -157,8 +161,16 @@ class SFFU_Admin {
 
         add_settings_field(
             'sffu_keep_records_on_uninstall',
-            'Keep Records on Uninstall',
+            'Delete file records and logs when uninstalling the plugin',
             array($this, 'render_keep_records_field'),
+            'sffu_settings',
+            'sffu_uninstall_section'
+        );
+
+        add_settings_field(
+            'sffu_delete_files_on_uninstall',
+            'Delete Files on Uninstall',
+            array($this, 'render_delete_files_field'),
             'sffu_settings',
             'sffu_uninstall_section'
         );
@@ -293,11 +305,19 @@ class SFFU_Admin {
     }
 
     public function render_keep_records_field() {
-        $keep_records = get_option('sffu_keep_records_on_uninstall', false);
+        $delete_records = get_option('sffu_keep_records_on_uninstall', false);
         echo '<label>';
-        echo '<input type="checkbox" name="sffu_keep_records_on_uninstall" value="1" ' . checked($keep_records, true, false) . '>';
-        echo ' Keep file records and logs when uninstalling the plugin</label>';
-        echo '<p class="description">If checked, file records and logs will be preserved when uninstalling the plugin. This can be useful for maintaining an audit trail, but may leave orphaned database records if files are deleted.</p>';
+        echo '<input type="checkbox" name="sffu_keep_records_on_uninstall" value="1" ' . checked($delete_records, true, false) . '>';
+        echo ' Delete file records and logs when uninstalling the plugin</label>';
+        echo '<p class="description">If checked, file records and logs will be deleted when uninstalling the plugin. If unchecked, records will be kept (default).</p>';
+    }
+
+    public function render_delete_files_field() {
+        $delete_files = get_option('sffu_delete_files_on_uninstall', false);
+        echo '<label>';
+        echo '<input type="checkbox" name="sffu_delete_files_on_uninstall" value="1" ' . checked($delete_files, true, false) . '>';
+        echo ' Delete all uploaded files when uninstalling the plugin</label>';
+        echo '<p class="description">If checked, all files in the secure uploads directory will be deleted when the plugin is uninstalled. This action cannot be undone.</p>';
     }
 
     public function render_link_expiry_enabled_field() {

@@ -17,6 +17,7 @@ class SFFU_Core {
     private $cipher_key;
     private $file_expiry;
     private $cleanup_expiry;
+    private $github_updater;
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -27,11 +28,16 @@ class SFFU_Core {
 
     public function __construct() {
         $this->init_hooks();
+        $this->init_github_updater();
     }
 
     private function init_hooks() {
         // Admin notices
         add_action('admin_notices', array($this, 'check_requirements'));
+        
+        // Add settings page
+        add_action('admin_menu', array($this, 'add_settings_page'));
+        add_action('admin_init', array($this, 'register_settings'));
         
         // File handling - direct hooks
         add_filter('fluentform_upload_file_path', array($this, 'modify_upload_path'), 10, 2);
@@ -49,6 +55,11 @@ class SFFU_Core {
         // Add AJAX handlers
         add_action('wp_ajax_sffu_download', array($this, 'handle_download'));
         add_action('wp_ajax_nopriv_sffu_download', array($this, 'handle_download'));
+        add_action('wp_ajax_sffu_get_download_nonce', array($this, 'ajax_get_download_nonce'));
+        
+        // Add entry detail page hooks
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_entry_scripts'));
+        add_action('wp_ajax_sffu_get_submission_files', array($this, 'ajax_get_submission_files'));
         
         // Cleanup
         add_action('sffu_cleanup_files', array($this, 'cleanup_files'));
@@ -64,6 +75,9 @@ class SFFU_Core {
 
         // Ensure logs table exists
         $this->ensure_logs_table();
+        
+        // Check for version update
+        $this->check_version_update();
     }
 
     private function init_constants() {
@@ -71,6 +85,16 @@ class SFFU_Core {
         $this->cipher_key = defined('SFFU_CIPHER_KEY') ? SFFU_CIPHER_KEY : wp_generate_password(64, true, true);
         $this->file_expiry = defined('SFFU_FILE_EXPIRY') ? SFFU_FILE_EXPIRY : 7 * 24 * 60 * 60;
         $this->cleanup_expiry = defined('SFFU_CLEANUP_EXPIRY') ? SFFU_CLEANUP_EXPIRY : 30 * 24 * 60 * 60;
+    }
+
+    private function init_github_updater() {
+        require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-github-updater.php';
+        $this->github_updater = new SFFU_GitHub_Updater(
+            'secure-fluentform-uploads',
+            'secure-fluentform-uploads',
+            SFFU_VERSION,
+            'YOUR_GITHUB_USERNAME' // Replace with your GitHub username
+        );
     }
 
     public function activate() {
@@ -96,9 +120,34 @@ class SFFU_Core {
             file_put_contents($index, '<?php // Silence is golden');
         }
 
+        // Drop and recreate tables to ensure proper structure
+        global $wpdb;
+        $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}sffu_files");
+        $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}sffu_logs");
+        
         // Create both tables
         $this->create_log_table();
         $this->ensure_logs_table();
+        
+        // Update existing tables if needed
+        $this->update_tables();
+    }
+
+    private function update_tables() {
+        global $wpdb;
+        $files_table = $wpdb->prefix . 'sffu_files';
+        
+        // Check if form_id column exists
+        $column_exists = $wpdb->get_results("SHOW COLUMNS FROM {$files_table} LIKE 'form_id'");
+        if (empty($column_exists)) {
+            $wpdb->query("ALTER TABLE {$files_table} ADD COLUMN form_id BIGINT DEFAULT 0");
+        }
+        
+        // Check if submission_id column exists
+        $column_exists = $wpdb->get_results("SHOW COLUMNS FROM {$files_table} LIKE 'submission_id'");
+        if (empty($column_exists)) {
+            $wpdb->query("ALTER TABLE {$files_table} ADD COLUMN submission_id BIGINT DEFAULT 0");
+        }
     }
 
     private function create_log_table() {
@@ -129,6 +178,8 @@ class SFFU_Core {
             file_size BIGINT NOT NULL,
             upload_time DATETIME DEFAULT CURRENT_TIMESTAMP,
             upload_user_id BIGINT NOT NULL,
+            submission_id BIGINT DEFAULT 0,
+            form_id BIGINT DEFAULT 0,
             encryption_key VARCHAR(255) NOT NULL,
             iv VARCHAR(255) NOT NULL,
             status VARCHAR(20) DEFAULT 'active',
@@ -200,6 +251,9 @@ class SFFU_Core {
             return;
         }
 
+        // Get form ID from the form object
+        $form_id = $form->id;
+
         foreach ($form_data as $key => $value) {
             if (is_array($value) && isset($value[0]) && filter_var($value[0], FILTER_VALIDATE_URL)) {
                 // This is a file upload field with URL
@@ -210,8 +264,29 @@ class SFFU_Core {
                 if (file_exists($file_path)) {
                     $new_path = $this->modify_upload_path($file_path, array('url' => $file_url));
                     if ($new_path !== $file_path) {
-                        // Update the submission data
+                        // Update the file record with submission ID and form ID
                         global $wpdb;
+                        
+                        // Check if columns exist before updating
+                        $columns = $wpdb->get_col("SHOW COLUMNS FROM {$wpdb->prefix}sffu_files");
+                        $update_data = array();
+                        
+                        if (in_array('submission_id', $columns)) {
+                            $update_data['submission_id'] = $submission_id;
+                        }
+                        if (in_array('form_id', $columns)) {
+                            $update_data['form_id'] = $form_id;
+                        }
+                        
+                        if (!empty($update_data)) {
+                            $wpdb->update(
+                                $wpdb->prefix . 'sffu_files',
+                                $update_data,
+                                array('file_path' => $new_path)
+                            );
+                        }
+
+                        // Update the submission data
                         $table = $wpdb->prefix . 'fluentform_submissions';
                         $wpdb->update(
                             $table,
@@ -348,24 +423,41 @@ class SFFU_Core {
             return $path;
         }
         
+        // Get form ID and submission ID from the file data if available
+        $form_id = isset($file['form_id']) ? intval($file['form_id']) : 0;
+        $submission_id = isset($file['submission_id']) ? intval($file['submission_id']) : 0;
+        
         // Store file information in database
         global $wpdb;
         $table = $wpdb->prefix . 'sffu_files';
-        $result = $wpdb->insert(
-            $table,
-            array(
-                'filename' => $new_filename,
-                'original_name' => $filename,
-                'file_path' => $new_path,
-                'mime_type' => mime_content_type($path),
-                'file_size' => filesize($path),
-                'upload_user_id' => get_current_user_id(),
-                'encryption_key' => $encryption_key,
-                'iv' => base64_encode($iv),
-                'status' => 'active'
-            ),
-            array('%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s')
+        
+        // Ensure table structure is up to date
+        $this->update_tables();
+        
+        // Prepare the data array with only existing columns
+        $data = array(
+            'filename' => $new_filename,
+            'original_name' => $filename,
+            'file_path' => $new_path,
+            'mime_type' => mime_content_type($path),
+            'file_size' => filesize($path),
+            'upload_user_id' => get_current_user_id(),
+            'encryption_key' => $encryption_key,
+            'iv' => base64_encode($iv),
+            'status' => 'active'
         );
+        
+        // Add form_id and submission_id if columns exist
+        $columns = $wpdb->get_col("SHOW COLUMNS FROM {$table}");
+        if (in_array('form_id', $columns)) {
+            $data['form_id'] = $form_id;
+        }
+        if (in_array('submission_id', $columns)) {
+            $data['submission_id'] = $submission_id;
+        }
+        
+        // Insert the data
+        $result = $wpdb->insert($table, $data);
         
         if ($result === false) {
             sffu_log('error', $filename, 'Failed to store file metadata: ' . $wpdb->last_error);
@@ -421,8 +513,11 @@ class SFFU_Core {
             wp_die('Invalid file', 'Security Error', array('response' => 400));
         }
 
-        // Verify nonce
+        // Verify nonce with file-specific action
         if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'sffu_download_' . $file)) {
+            error_log('SFFU Download - Nonce verification failed for file: ' . $file);
+            error_log('SFFU Download - Received nonce: ' . (isset($_GET['_wpnonce']) ? $_GET['_wpnonce'] : 'none'));
+            error_log('SFFU Download - Expected action: sffu_download_' . $file);
             wp_die('Security check failed', 'Security Error', array('response' => 403));
         }
 
@@ -573,10 +668,9 @@ EOD;
         
         // Get files with user information
         $query = $wpdb->prepare(
-            "SELECT f.*, u.display_name as uploader_name, s.id as submission_id 
+            "SELECT f.*, u.display_name as uploader_name 
             FROM {$wpdb->prefix}sffu_files f 
             LEFT JOIN {$wpdb->users} u ON f.upload_user_id = u.ID 
-            LEFT JOIN {$wpdb->prefix}fluentform_submissions s ON f.upload_user_id = s.user_id 
             WHERE f.status = %s 
             ORDER BY f.upload_time DESC",
             'active'
@@ -604,7 +698,8 @@ EOD;
                 'size' => $file->file_size,
                 'mime_type' => $file->mime_type,
                 'uploader' => $file->uploader_name,
-                'submission_id' => $file->submission_id
+                'submission_id' => $file->submission_id,
+                'form_id' => $file->form_id
             );
         }
 
@@ -639,6 +734,16 @@ EOD;
 
     public function after_file_upload($file, $form_id) {
         if (isset($file['tmp_name']) && file_exists($file['tmp_name'])) {
+            // Add form_id to the file data
+            $file['form_id'] = $form_id;
+            
+            // Try to get submission_id from the current submission if available
+            $submission_id = 0;
+            if (isset($_POST['_fluentform_submission_id'])) {
+                $submission_id = intval($_POST['_fluentform_submission_id']);
+            }
+            $file['submission_id'] = $submission_id;
+            
             $this->modify_upload_path($file['tmp_name'], $file);
         }
     }
@@ -678,10 +783,10 @@ EOD;
     public function uninstall_cleanup() {
         global $wpdb;
         
-        // Check if we should keep records
-        $keep_records = get_option('sffu_keep_records_on_uninstall', '0');
+        // Check if we should delete records
+        $delete_records = get_option('sffu_keep_records_on_uninstall', '0');
         
-        if ($keep_records === '0') {
+        if ($delete_records === '1' || $delete_records === 1) {
             // Drop tables
             $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}sffu_files");
             $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}sffu_logs");
@@ -692,5 +797,172 @@ EOD;
             delete_option('sffu_allowed_types');
             delete_option('sffu_cleanup_enabled');
         }
+    }
+
+    public function get_submission_files($submission_id, $form_id) {
+        global $wpdb;
+        
+        $query = $wpdb->prepare(
+            "SELECT f.*, u.display_name as uploader_name,
+            COALESCE(f.submission_id, 0) as submission_id,
+            COALESCE(f.form_id, 0) as form_id
+            FROM {$wpdb->prefix}sffu_files f 
+            LEFT JOIN {$wpdb->users} u ON f.upload_user_id = u.ID 
+            WHERE f.submission_id = %d AND f.form_id = %d AND f.status = %s 
+            ORDER BY f.upload_time DESC",
+            $submission_id,
+            $form_id,
+            'active'
+        );
+            
+        return $wpdb->get_results($query);
+    }
+
+    public function can_access_files() {
+        // Get allowed roles
+        $allowed_roles = get_option('sffu_allowed_roles', array('administrator'));
+        
+        // Check if user has any of the allowed roles
+        $user = wp_get_current_user();
+        $has_permission = false;
+        
+        foreach ($allowed_roles as $role) {
+            if (in_array($role, $user->roles)) {
+                $has_permission = true;
+                break;
+            }
+        }
+        
+        return $has_permission;
+    }
+
+    public function enqueue_entry_scripts($hook) {
+        // Check if we're on a FluentForms page
+        if (strpos($hook, 'fluent_forms') === false) {
+            return;
+        }
+
+        // Check if we're on the entries page
+        $is_entries_page = isset($_GET['route']) && $_GET['route'] === 'entries';
+        
+        // Get form ID from URL
+        $form_id = isset($_GET['form_id']) ? intval($_GET['form_id']) : 0;
+
+        // Debug logging
+        error_log('Debug: SFFU - Current hook: ' . $hook);
+        error_log('Debug: SFFU - Is entries page: ' . ($is_entries_page ? 'yes' : 'no'));
+        error_log('Debug: SFFU - Form ID: ' . $form_id);
+        error_log('Debug: SFFU - GET params: ' . print_r($_GET, true));
+
+        // Only proceed if we have form_id and are on entries page
+        if (!$is_entries_page || !$form_id) {
+            error_log('Debug: SFFU - Not loading script - missing required parameters');
+            return;
+        }
+
+        // Enqueue the script
+        wp_enqueue_script(
+            'sffu-entry-detail',
+            plugins_url('assets/js/entry-detail.js', dirname(__FILE__)),
+            array('jquery'),
+            SFFU_VERSION,
+            true
+        );
+
+        wp_localize_script('sffu-entry-detail', 'sffuEntry', array(
+            'ajaxurl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('sffu_entry_files'),
+            'canAccess' => $this->can_access_files(),
+            'formId' => $form_id
+        ));
+
+        error_log('Debug: SFFU - Script enqueued successfully');
+    }
+
+    public function ajax_get_submission_files() {
+        check_ajax_referer('sffu_entry_files', 'nonce');
+
+        if (!$this->can_access_files()) {
+            wp_send_json_error('Unauthorized access');
+        }
+
+        $submission_id = isset($_POST['submission_id']) ? intval($_POST['submission_id']) : 0;
+        $form_id = isset($_POST['form_id']) ? intval($_POST['form_id']) : 0;
+
+        if (!$submission_id || !$form_id) {
+            wp_send_json_error('Invalid submission or form ID');
+        }
+
+        $files = $this->get_submission_files($submission_id, $form_id);
+        wp_send_json_success($files);
+    }
+
+    public function ajax_get_download_nonce() {
+        check_ajax_referer('sffu_entry_files', 'nonce');
+        
+        if (!$this->can_access_files()) {
+            wp_send_json_error('Unauthorized access');
+        }
+        
+        $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
+        if (empty($filename)) {
+            wp_send_json_error('Invalid filename');
+        }
+        
+        $nonce = wp_create_nonce('sffu_download_' . $filename);
+        wp_send_json_success(array('nonce' => $nonce));
+    }
+
+    private function check_version_update() {
+        $current_version = get_option('sffu_version', '1.0.0');
+        if (version_compare($current_version, SFFU_VERSION, '<')) {
+            $this->update_tables();
+            update_option('sffu_version', SFFU_VERSION);
+        }
+    }
+
+    public function add_settings_page() {
+        add_submenu_page(
+            'options-general.php',
+            'Secure FluentForm Uploads Settings',
+            'Secure Uploads',
+            'manage_options',
+            'secure-fluentform-uploads',
+            array($this, 'render_settings_page')
+        );
+    }
+
+    public function register_settings() {
+        register_setting('sffu_settings', 'sffu_github_token');
+    }
+
+    public function render_settings_page() {
+        ?>
+        <div class="wrap">
+            <h1>Secure FluentForm Uploads Settings</h1>
+            <form method="post" action="options.php">
+                <?php settings_fields('sffu_settings'); ?>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="sffu_github_token">GitHub Access Token</label>
+                        </th>
+                        <td>
+                            <input type="password" 
+                                   id="sffu_github_token" 
+                                   name="sffu_github_token" 
+                                   value="<?php echo esc_attr(get_option('sffu_github_token')); ?>" 
+                                   class="regular-text">
+                            <p class="description">
+                                Enter your GitHub personal access token to enable automatic updates. 
+                                <a href="https://github.com/settings/tokens" target="_blank">Create a token</a>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+            </form>
+        </div>
+        <?php
     }
 } 

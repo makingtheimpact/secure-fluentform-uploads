@@ -47,7 +47,7 @@ $files = SFFU_Core::get_instance()->get_uploaded_files();
                         <td><?php echo esc_html(size_format($file['size'])); ?></td>
                         <td><?php echo esc_html($file['mime_type']); ?></td>
                         <td>
-                            <a href="<?php echo esc_url(admin_url('admin.php?page=fluentform&route=entries&form_id=' . $file['submission_id'])); ?>">
+                            <a href="<?php echo esc_url(admin_url('admin.php?page=fluent_forms&route=entries&form_id=' . $file['form_id'] . '#/entries/' . $file['submission_id'])); ?>">
                                 <?php echo esc_html($file['submission_id']); ?>
                             </a>
                         </td>

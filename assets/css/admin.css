@@ -87,4 +87,34 @@
 .sffu-delete-file:hover {
     color: #dc3232 !important;
     border-color: #dc3232 !important;
+}
+
+.sffu-downloads-section {
+    margin-top: 20px;
+    padding: 15px;
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.sffu-downloads-section h3 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.sffu-downloads-section table {
+    margin-top: 10px;
+}
+
+.sffu-downloads-section th {
+    font-weight: 600;
+}
+
+.sffu-downloads-section td {
+    vertical-align: middle;
+}
+
+.sffu-downloads-section .button-small {
+    margin: 0;
 } 

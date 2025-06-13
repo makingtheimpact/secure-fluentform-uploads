@@ -2,9 +2,20 @@
 /**
  * Plugin Name: Secure FluentForm Uploads
  * Description: Moves FluentForm uploads to a private folder, renames them, encrypts metadata, and allows admin-only access.
- * Version: 1.0
+ * Version: 1.0.1
  * Author: Making The Impact LLC
  */
+
+/* 
+TO DO: 
+* Uploaded files page: fix bug showing duplicate entries, fix broken links to form entry submissions - DONE
+* Try to save the form ID when saving the file to create working links for uploaded files to form submissions - DONE
+* Test the plugin thoroughly with different options, file types, file sizes, etc.
+* When plugin is removed, delete the upload directory and all files in it (add option to settings page for this) - DONE
+* Use javascript or something to add a button to the entry page to display the uploaded files - use a new page or popupthat will display the uploads based on the entry ID for the form so it can display a list of all the files or that entry. 
+*/
+
+
 
 defined('ABSPATH') || exit;
 
