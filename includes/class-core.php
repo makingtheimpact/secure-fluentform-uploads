@@ -255,53 +255,77 @@ class SFFU_Core {
         $form_id = $form->id;
 
         foreach ($form_data as $key => $value) {
-            if (is_array($value) && isset($value[0]) && filter_var($value[0], FILTER_VALIDATE_URL)) {
-                // This is a file upload field with URL
-                $file_url = $value[0];
-                $upload_dir = wp_upload_dir();
-                $file_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $file_url);
-                
-                if (file_exists($file_path)) {
-                    $new_path = $this->modify_upload_path($file_path, array('url' => $file_url));
-                    if ($new_path !== $file_path) {
-                        // Update the file record with submission ID and form ID
-                        global $wpdb;
-                        
-                        // Check if columns exist before updating
-                        $columns = $wpdb->get_col("SHOW COLUMNS FROM {$wpdb->prefix}sffu_files");
-                        $update_data = array();
-                        
-                        if (in_array('submission_id', $columns)) {
-                            $update_data['submission_id'] = $submission_id;
-                        }
-                        if (in_array('form_id', $columns)) {
-                            $update_data['form_id'] = $form_id;
-                        }
-                        
-                        if (!empty($update_data)) {
-                            $wpdb->update(
-                                $wpdb->prefix . 'sffu_files',
-                                $update_data,
-                                array('file_path' => $new_path)
-                            );
-                        }
+            if (is_array($value)) {
+                // Handle both single and multiple file uploads
+                $file_urls = array_filter($value, function($url) {
+                    return filter_var($url, FILTER_VALIDATE_URL);
+                });
 
-                        // Update the submission data
-                        $table = $wpdb->prefix . 'fluentform_submissions';
-                        $wpdb->update(
-                            $table,
-                            array('response' => json_encode($form_data)),
-                            array('id' => $submission_id)
-                        );
+                if (!empty($file_urls)) {
+                    $upload_dir = wp_upload_dir();
+                    $updated_urls = array();
 
-                        // Clean up temp files
-                        $this->cleanup_temp_files($file_path);
+                    foreach ($file_urls as $file_url) {
+                        $file_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $file_url);
+                        
+                        if (file_exists($file_path)) {
+                            $new_path = $this->modify_upload_path($file_path, array(
+                                'url' => $file_url,
+                                'form_id' => $form_id,
+                                'submission_id' => $submission_id
+                            ));
+
+                            if ($new_path !== $file_path) {
+                                // Update the file record with submission ID and form ID
+                                global $wpdb;
+                                
+                                // Check if columns exist before updating
+                                $columns = $wpdb->get_col("SHOW COLUMNS FROM {$wpdb->prefix}sffu_files");
+                                $update_data = array();
+                                
+                                if (in_array('submission_id', $columns)) {
+                                    $update_data['submission_id'] = $submission_id;
+                                }
+                                if (in_array('form_id', $columns)) {
+                                    $update_data['form_id'] = $form_id;
+                                }
+                                
+                                if (!empty($update_data)) {
+                                    $wpdb->update(
+                                        $wpdb->prefix . 'sffu_files',
+                                        $update_data,
+                                        array('file_path' => $new_path)
+                                    );
+                                }
+
+                                // Add the new URL to our updated URLs array
+                                $updated_urls[] = str_replace($upload_dir['basedir'], $upload_dir['baseurl'], $new_path);
+
+                                // Clean up temp files
+                                $this->cleanup_temp_files($file_path);
+                            } else {
+                                $updated_urls[] = $file_url;
+                            }
+                        } else {
+                            sffu_log('error', basename($file_path), 'File not found during submission');
+                            $updated_urls[] = $file_url;
+                        }
                     }
-                } else {
-                    sffu_log('error', basename($file_path), 'File not found during submission');
+
+                    // Update the form data with the new URLs
+                    $form_data[$key] = $updated_urls;
                 }
             }
         }
+
+        // Update the submission data with the modified form data
+        global $wpdb;
+        $table = $wpdb->prefix . 'fluentform_submissions';
+        $wpdb->update(
+            $table,
+            array('response' => json_encode($form_data)),
+            array('id' => $submission_id)
+        );
     }
 
     public function process_submission_data($submission_data, $form) {
@@ -310,17 +334,33 @@ class SFFU_Core {
         }
 
         foreach ($submission_data as $key => $value) {
-            if (is_array($value) && isset($value[0]) && filter_var($value[0], FILTER_VALIDATE_URL)) {
-                // This is a file upload field with URL
-                $file_url = $value[0];
-                $upload_dir = wp_upload_dir();
-                $file_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $file_url);
-                
-                if (file_exists($file_path)) {
-                    $new_path = $this->modify_upload_path($file_path, array('url' => $file_url));
-                    if ($new_path !== $file_path) {
-                        $submission_data[$key][0] = str_replace($upload_dir['basedir'], $upload_dir['baseurl'], $new_path);
+            if (is_array($value)) {
+                // Handle both single and multiple file uploads
+                $file_urls = array_filter($value, function($url) {
+                    return filter_var($url, FILTER_VALIDATE_URL);
+                });
+
+                if (!empty($file_urls)) {
+                    $upload_dir = wp_upload_dir();
+                    $updated_urls = array();
+
+                    foreach ($file_urls as $file_url) {
+                        $file_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $file_url);
+                        
+                        if (file_exists($file_path)) {
+                            $new_path = $this->modify_upload_path($file_path, array('url' => $file_url));
+                            if ($new_path !== $file_path) {
+                                $updated_urls[] = str_replace($upload_dir['basedir'], $upload_dir['baseurl'], $new_path);
+                            } else {
+                                $updated_urls[] = $file_url;
+                            }
+                        } else {
+                            $updated_urls[] = $file_url;
+                        }
                     }
+
+                    // Update the submission data with the new URLs
+                    $submission_data[$key] = $updated_urls;
                 }
             }
         }
