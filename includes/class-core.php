@@ -17,7 +17,7 @@ class SFFU_Core {
     private $cipher_key;
     private $file_expiry;
     private $cleanup_expiry;
-    private $github_updater;
+    private $updater;
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -28,16 +28,12 @@ class SFFU_Core {
 
     public function __construct() {
         $this->init_hooks();
-        $this->init_github_updater();
+        $this->init_updater();
     }
 
     private function init_hooks() {
         // Admin notices
         add_action('admin_notices', array($this, 'check_requirements'));
-        
-        // Add settings page
-        add_action('admin_menu', array($this, 'add_settings_page'));
-        add_action('admin_init', array($this, 'register_settings'));
         
         // File handling - direct hooks
         add_filter('fluentform_upload_file_path', array($this, 'modify_upload_path'), 10, 2);
@@ -87,14 +83,9 @@ class SFFU_Core {
         $this->cleanup_expiry = defined('SFFU_CLEANUP_EXPIRY') ? SFFU_CLEANUP_EXPIRY : 30 * 24 * 60 * 60;
     }
 
-    private function init_github_updater() {
-        require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-github-updater.php';
-        $this->github_updater = new SFFU_GitHub_Updater(
-            'secure-fluentform-uploads',
-            'secure-fluentform-uploads',
-            SFFU_VERSION,
-            'YOUR_GITHUB_USERNAME' // Replace with your GitHub username
-        );
+    private function init_updater() {
+        require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-updater.php';
+        $this->updater = SFFU_Updater::get_instance();
     }
 
     public function activate() {
@@ -652,14 +643,115 @@ class SFFU_Core {
 
     public function check_upload_directory() {
         $upload_dir = get_option('sffu_upload_dir', WP_CONTENT_DIR . '/secure-uploads/');
+        $old_upload_dir = $this->upload_dir;
         
-        // Create directory if it doesn't exist
-        if (!file_exists($upload_dir)) {
-            if (!wp_mkdir_p($upload_dir)) {
-                add_action('admin_notices', function() use ($upload_dir) {
-                    echo '<div class="error"><p>Failed to create upload directory: ' . esc_html($upload_dir) . '. Please check permissions.</p></div>';
-                });
-                return false;
+        // If directory has changed, move files
+        if ($old_upload_dir && $old_upload_dir !== $upload_dir && is_dir($old_upload_dir)) {
+            // Create new directory if it doesn't exist
+            if (!file_exists($upload_dir)) {
+                if (!wp_mkdir_p($upload_dir)) {
+                    add_action('admin_notices', function() use ($upload_dir) {
+                        echo '<div class="error"><p>Failed to create new upload directory: ' . esc_html($upload_dir) . '. Please check permissions.</p></div>';
+                    });
+                    return false;
+                }
+            }
+
+            // Get all files from old directory
+            $files = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($old_upload_dir, RecursiveDirectoryIterator::SKIP_DOTS),
+                RecursiveIteratorIterator::CHILD_FIRST
+            );
+
+            $moved_files = 0;
+            $failed_files = 0;
+
+            foreach ($files as $file) {
+                if ($file->isFile()) {
+                    $old_path = $file->getRealPath();
+                    $new_path = $upload_dir . basename($old_path);
+
+                    // Move file
+                    if (@rename($old_path, $new_path)) {
+                        $moved_files++;
+                        
+                        // Update file path in database
+                        global $wpdb;
+                        $wpdb->update(
+                            $wpdb->prefix . 'sffu_files',
+                            array('file_path' => $new_path),
+                            array('file_path' => $old_path)
+                        );
+                    } else {
+                        $failed_files++;
+                        sffu_log('error', basename($old_path), 'Failed to move file to new location');
+                    }
+                }
+            }
+
+            // Create .htaccess and index.php in new directory
+            $htaccess = $upload_dir . '.htaccess';
+            $htaccess_content = "Order deny,allow\nDeny from all\n<Files ~ \"\\.php$\">\nDeny from all\n</Files>";
+            if (!file_exists($htaccess)) {
+                file_put_contents($htaccess, $htaccess_content);
+                chmod($htaccess, 0644);
+            }
+
+            $index = $upload_dir . 'index.php';
+            $index_content = <<<'EOD'
+<?php
+// Silence is golden
+if (!defined("ABSPATH")) {
+    exit;
+}
+header("HTTP/1.0 403 Forbidden");
+exit;
+EOD;
+            if (!file_exists($index)) {
+                file_put_contents($index, $index_content);
+                chmod($index, 0644);
+            }
+
+            // Show notice about moved files
+            add_action('admin_notices', function() use ($moved_files, $failed_files) {
+                if ($moved_files > 0) {
+                    echo '<div class="notice notice-success"><p>' . 
+                         sprintf(_n('Successfully moved %d file to new location.', 'Successfully moved %d files to new location.', $moved_files, 'secure-fluentform-uploads'), $moved_files) . 
+                         '</p></div>';
+                }
+                if ($failed_files > 0) {
+                    echo '<div class="error"><p>' . 
+                         sprintf(_n('Failed to move %d file to new location.', 'Failed to move %d files to new location.', $failed_files, 'secure-fluentform-uploads'), $failed_files) . 
+                         '</p></div>';
+                }
+            });
+
+            // Remove old directory if empty
+            if ($moved_files > 0 && $failed_files === 0) {
+                $old_files = new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator($old_upload_dir, RecursiveDirectoryIterator::SKIP_DOTS),
+                    RecursiveIteratorIterator::CHILD_FIRST
+                );
+                $is_empty = true;
+                foreach ($old_files as $file) {
+                    if ($file->isFile()) {
+                        $is_empty = false;
+                        break;
+                    }
+                }
+                if ($is_empty) {
+                    @rmdir($old_upload_dir);
+                }
+            }
+        } else {
+            // Create directory if it doesn't exist
+            if (!file_exists($upload_dir)) {
+                if (!wp_mkdir_p($upload_dir)) {
+                    add_action('admin_notices', function() use ($upload_dir) {
+                        echo '<div class="error"><p>Failed to create upload directory: ' . esc_html($upload_dir) . '. Please check permissions.</p></div>';
+                    });
+                    return false;
+                }
             }
         }
 
@@ -817,6 +909,9 @@ EOD;
             
             require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
             dbDelta($sql);
+            
+            // Log table creation
+            error_log('SFFU: Created logs table');
         }
     }
 
@@ -961,48 +1056,26 @@ EOD;
         }
     }
 
-    public function add_settings_page() {
-        add_submenu_page(
-            'options-general.php',
-            'Secure FluentForm Uploads Settings',
-            'Secure Uploads',
-            'manage_options',
-            'secure-fluentform-uploads',
-            array($this, 'render_settings_page')
-        );
-    }
+    public function secure_upload($file, $form_id) {
+        // Check if this form should be secured
+        $settings = get_option('sffu_settings');
+        if ($settings['enabled_forms'] !== 'all' && !in_array($form_id, (array)$settings['enabled_forms'])) {
+            return $file; // Skip security for this form
+        }
 
-    public function register_settings() {
-        register_setting('sffu_settings', 'sffu_github_token');
-    }
+        // Get file extension
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        
+        // Check if file type is allowed
+        if (!in_array($ext, $settings['allowed_types'])) {
+            $file['error'] = sprintf(
+                __('File type .%s is not allowed. Allowed types: %s', 'secure-fluentform-uploads'),
+                $ext,
+                implode(', ', $settings['allowed_types'])
+            );
+            return $file;
+        }
 
-    public function render_settings_page() {
-        ?>
-        <div class="wrap">
-            <h1>Secure FluentForm Uploads Settings</h1>
-            <form method="post" action="options.php">
-                <?php settings_fields('sffu_settings'); ?>
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">
-                            <label for="sffu_github_token">GitHub Access Token</label>
-                        </th>
-                        <td>
-                            <input type="password" 
-                                   id="sffu_github_token" 
-                                   name="sffu_github_token" 
-                                   value="<?php echo esc_attr(get_option('sffu_github_token')); ?>" 
-                                   class="regular-text">
-                            <p class="description">
-                                Enter your GitHub personal access token to enable automatic updates. 
-                                <a href="https://github.com/settings/tokens" target="_blank">Create a token</a>
-                            </p>
-                        </td>
-                    </tr>
-                </table>
-                <?php submit_button(); ?>
-            </form>
-        </div>
-        <?php
+        // ... existing code ...
     }
 } 

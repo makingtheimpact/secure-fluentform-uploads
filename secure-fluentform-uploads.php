@@ -2,8 +2,10 @@
 /**
  * Plugin Name: Secure FluentForm Uploads
  * Description: Moves FluentForm uploads to a private folder, renames them, encrypts metadata, and allows admin-only access.
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: Making The Impact LLC
+ * Requires at least: 5.6
+ * Requires PHP: 7.2
  */
 
 /* 
@@ -15,12 +17,12 @@ TO DO:
 * Use javascript or something to add a button to the entry page to display the uploaded files - use a new page or popupthat will display the uploads based on the entry ID for the form so it can display a list of all the files or that entry. 
 */
 
-
-
-defined('ABSPATH') || exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 // Define plugin constants
-define('SFFU_VERSION', '1.0');
+define('SFFU_VERSION', '1.0.1');
 define('SFFU_PLUGIN_FILE', __FILE__);
 define('SFFU_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SFFU_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -46,9 +48,8 @@ define('SFFU_ALLOWED_MIME_TYPES', [
     'application/x-msdownload', 'application/x-msdos-program', 'application/x-ms-installer', 'application/x-exe', 'application/x-executable', 'application/x-dosexec', 'application/octet-stream'
 ]);
 
-// Autoload classes
+// Autoloader
 spl_autoload_register(function($class) {
-    // Ensure WordPress is loaded
     if (!function_exists('wp_get_current_user')) {
         return;
     }
@@ -71,138 +72,156 @@ spl_autoload_register(function($class) {
 
 // Initialize plugin
 function sffu_init() {
-    // Check if WordPress is fully loaded
-    if (!function_exists('wp_get_current_user')) {
-        return;
-    }
-    
-    // Check if FluentForms is active
-    if (!class_exists('FluentForm\App\Modules\Form\Form')) {
+    if (!class_exists('FluentForm') && !class_exists('FluentForm\App\Modules\Form\Form')) {
         add_action('admin_notices', function() {
-            echo '<div class="error"><p>Secure FluentForm Uploads requires FluentForms to be installed and activated. <a href="' . 
-                 esc_url(admin_url('plugin-install.php?s=fluentform&tab=search&type=term')) . 
-                 '">Install FluentForms</a> or <a href="' . 
-                 esc_url('https://wordpress.org/plugins/fluentform/') . 
-                 '" target="_blank">get it here</a>.</p></div>';
-        });
-        return;
-    }
-    
-    // Check requirements
-    if (!function_exists('openssl_encrypt') || !function_exists('openssl_decrypt')) {
-        add_action('admin_notices', function() {
-            echo '<div class="error"><p>Secure FluentForm Uploads requires OpenSSL PHP extension to be installed.</p></div>';
+            echo '<div class="error"><p>' . 
+                __('Secure FluentForm Uploads requires Fluent Forms to be installed and activated.', 'secure-fluentform-uploads') . 
+                '</p></div>';
         });
         return;
     }
 
-    // Define cipher key after WordPress is loaded
-    if (!defined('SFFU_CIPHER_KEY')) {
-        define('SFFU_CIPHER_KEY', wp_generate_password(64, true, true));
-    }
-
-    // Check if required classes exist
-    $required_classes = array('SFFU_Core', 'SFFU_Admin', 'SFFU_Updater');
-    $missing_classes = array();
-    
-    foreach ($required_classes as $class) {
-        if (!class_exists($class)) {
-            $missing_classes[] = $class;
-        }
-    }
-    
-    if (!empty($missing_classes)) {
-        add_action('admin_notices', function() use ($missing_classes) {
-            echo '<div class="error"><p>Secure FluentForm Uploads: The following required classes are missing: ' . 
-                 esc_html(implode(', ', $missing_classes)) . '. Please reinstall the plugin.</p></div>';
+    if (!extension_loaded('openssl')) {
+        add_action('admin_notices', function() {
+            echo '<div class="error"><p>' . 
+                __('Secure FluentForm Uploads requires the OpenSSL PHP extension to be installed.', 'secure-fluentform-uploads') . 
+                '</p></div>';
         });
         return;
     }
 
     // Initialize components
-    try {
-        SFFU_Core::get_instance();
-        SFFU_Admin::get_instance();
-        SFFU_Updater::get_instance();
-    } catch (Exception $e) {
-        add_action('admin_notices', function() use ($e) {
-            echo '<div class="error"><p>Secure FluentForm Uploads Error: ' . esc_html($e->getMessage()) . '</p></div>';
-        });
-    }
+    SFFU_Core::get_instance();
+    SFFU_Security::get_instance();
+    SFFU_File_Processor::get_instance();
+    SFFU_Hosting_Compatibility::get_instance();
+    SFFU_UI::get_instance();
+    SFFU_Admin::get_instance();
+
+    // Register settings
+    add_action('admin_init', 'sffu_register_settings');
 }
 add_action('plugins_loaded', 'sffu_init');
 
-// Add settings link to plugins page
-add_filter('plugin_action_links_' . plugin_basename(__FILE__), function($links) {
-    $settings_link = '<a href="' . admin_url('admin.php?page=secure-fluentform-uploads') . '">' . __('Settings') . '</a>';
-    array_unshift($links, $settings_link);
-    return $links;
-});
-
-// Utility function to get upload directory
-function sffu_get_upload_dir() {
-    $custom = get_option('sffu_upload_dir');
-    if ($custom && is_string($custom)) {
-        $dir = trailingslashit($custom);
-    } else {
-        $upload = wp_upload_dir();
-        $dir = trailingslashit($upload['basedir']) . 'fluentform-uploads/';
-    }
-    return $dir;
+// Register settings
+function sffu_register_settings() {
+    register_setting('sffu_settings', 'sffu_settings', array(
+        'type' => 'array',
+        'sanitize_callback' => 'sffu_sanitize_settings'
+    ));
 }
 
-// Utility function to log actions
-function sffu_log($action, $file = '', $details = '') {
-    global $wpdb;
-    $table = $wpdb->prefix . 'sffu_logs';
+// Sanitize settings
+function sffu_sanitize_settings($input) {
+    $sanitized = array();
     
-    $wpdb->insert(
-        $table,
-        array(
-            'action' => $action,
-            'file' => $file,
-            'user_id' => get_current_user_id(),
-            'user_login' => wp_get_current_user()->user_login,
-            'ip' => $_SERVER['REMOTE_ADDR'],
-            'details' => $details
-        ),
-        array('%s', '%s', '%d', '%s', '%s', '%s')
-    );
+    // Upload directory
+    if (isset($input['upload_dir'])) {
+        $sanitized['upload_dir'] = sanitize_text_field($input['upload_dir']);
+    }
+    
+    // Max file size
+    if (isset($input['max_file_size'])) {
+        $sanitized['max_file_size'] = absint($input['max_file_size']);
+    }
+    
+    // Allowed types
+    if (isset($input['allowed_types']) && is_array($input['allowed_types'])) {
+        $sanitized['allowed_types'] = array_map('sanitize_text_field', $input['allowed_types']);
+    }
+    
+    // Allowed roles
+    if (isset($input['allowed_roles']) && is_array($input['allowed_roles'])) {
+        $sanitized['allowed_roles'] = array_map('sanitize_text_field', $input['allowed_roles']);
+    }
+    
+    // File expiry
+    if (isset($input['file_expiry'])) {
+        $sanitized['file_expiry'] = absint($input['file_expiry']);
+    }
+    
+    // Cleanup settings
+    $sanitized['cleanup_enabled'] = isset($input['cleanup_enabled']) ? (bool)$input['cleanup_enabled'] : false;
+    if (isset($input['cleanup_interval'])) {
+        $sanitized['cleanup_interval'] = absint($input['cleanup_interval']);
+    }
+    if (isset($input['cleanup_unit'])) {
+        $sanitized['cleanup_unit'] = sanitize_text_field($input['cleanup_unit']);
+    }
+    
+    // Cleanup on uninstall
+    $sanitized['cleanup_on_uninstall'] = isset($input['cleanup_on_uninstall']) ? (bool)$input['cleanup_on_uninstall'] : false;
+    
+    // Enabled forms
+    if (isset($input['enabled_forms'])) {
+        if ($input['enabled_forms'] === 'all') {
+            $sanitized['enabled_forms'] = 'all';
+        } elseif (is_array($input['enabled_forms'])) {
+            $sanitized['enabled_forms'] = array_map('absint', $input['enabled_forms']);
+        }
+    }
+    
+    return $sanitized;
 }
 
-// Register activation hook
-register_activation_hook(__FILE__, function() {
+// Activation hook
+register_activation_hook(__FILE__, 'sffu_activate');
+function sffu_activate() {
+    // Set default settings
+    $default_settings = array(
+        'max_file_size' => min(wp_max_upload_size() / 1024 / 1024, 10), // Convert bytes to MB, max 10MB default
+        'upload_dir' => WP_CONTENT_DIR . '/secure-uploads/',
+        'allowed_types' => array(
+            // Images
+            'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico',
+            // Documents
+            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'odt', 'ods', 'odp',
+            // Archives
+            'zip', 'rar', '7z', 'tar', 'gz',
+            // Audio
+            'mp3', 'wav', 'ogg', 'm4a', 'wma',
+            // Video
+            'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm',
+            // Other
+            'csv', 'xml', 'json'
+        ),
+        'allowed_roles' => array('administrator'),
+        'file_expiry' => 30,
+        'cleanup_enabled' => true,
+        'cleanup_interval' => 30,
+        'cleanup_unit' => 'days',
+        'cleanup_on_uninstall' => false,
+        'enabled_forms' => 'all' // 'all' or array of form IDs
+    );
+    
+    // Only set defaults if settings don't exist
+    if (!get_option('sffu_settings')) {
+        update_option('sffu_settings', $default_settings);
+    }
+    
     // Create upload directory
-    if (!file_exists(SFFU_UPLOAD_DIR)) {
-        if (!wp_mkdir_p(SFFU_UPLOAD_DIR)) {
-            add_action('admin_notices', function() {
-                echo '<div class="error"><p>Failed to create upload directory. Please check permissions.</p></div>';
-            });
-            return;
-        }
-    }
-
-    // Create .htaccess
-    $upload_dir = sffu_get_upload_dir();
+    $upload_dir = $default_settings['upload_dir'];
     if (!file_exists($upload_dir)) {
-        if (!wp_mkdir_p($upload_dir)) {
-            add_action('admin_notices', function() {
-                echo '<div class="error"><p>Failed to create upload directory. Please check permissions.</p></div>';
-            });
-            return;
-        }
+        wp_mkdir_p($upload_dir);
     }
-
+    
+    // Create .htaccess to protect directory
     $htaccess = $upload_dir . '.htaccess';
     if (!file_exists($htaccess)) {
-        file_put_contents($htaccess, "Order deny,allow\nDeny from all");
+        $htaccess_content = "Order deny,allow\nDeny from all\n<Files ~ \"\\.php$\">\nDeny from all\n</Files>";
+        file_put_contents($htaccess, $htaccess_content);
     }
-
-    // Create index.php
+    
+    // Create index.php to prevent directory listing
     $index = $upload_dir . 'index.php';
     if (!file_exists($index)) {
-        file_put_contents($index, '<?php // Silence is golden');
+        $index_content = "<?php\n// Silence is golden\nif (!defined('ABSPATH')) {\n    exit;\n}\nheader('HTTP/1.0 403 Forbidden');\nexit;";
+        file_put_contents($index, $index_content);
     }
+
+    // Create database tables
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
 
     // Create log table
     global $wpdb;
@@ -244,9 +263,86 @@ register_activation_hook(__FILE__, function() {
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
     }
-});
 
-// Add deactivation hook to clean up
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+
+    // Set version
+    update_option('sffu_version', SFFU_VERSION);
+
+}
+
+
+
+// Deactivation hook
 register_deactivation_hook(__FILE__, function() {
     wp_clear_scheduled_hook('sffu_cleanup_files');
 });
+
+// Register uninstall hook
+register_uninstall_hook(__FILE__, 'sffu_uninstall');
+
+function sffu_uninstall() {
+    $settings = get_option('sffu_settings', array());
+    
+    if (!empty($settings['cleanup_on_uninstall'])) {
+        // Delete all files
+        $upload_dir = SFFU_UPLOAD_DIR;
+        if (is_dir($upload_dir)) {
+            $files = glob($upload_dir . '*');
+            foreach ($files as $file) {
+                if (is_file($file)) {
+                    @unlink($file);
+                }
+            }
+            @rmdir($upload_dir);
+        }
+
+        // Delete database tables
+        global $wpdb;
+        $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}sffu_files");
+        $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}sffu_logs");
+
+        // Delete options
+        delete_option('sffu_settings');
+        delete_option('sffu_version');
+    }
+}
+
+// Logging function
+function sffu_log($action, $file = '', $details = '') {
+    global $wpdb;
+    $table = $wpdb->prefix . 'sffu_logs';
+    
+    $wpdb->insert(
+        $table,
+        array(
+            'action' => $action,
+            'file' => $file,
+            'user_id' => get_current_user_id(),
+            'user_login' => wp_get_current_user()->user_login,
+            'ip' => $_SERVER['REMOTE_ADDR'],
+            'details' => $details
+        ),
+        array('%s', '%s', '%d', '%s', '%s', '%s')
+    );
+}
+
+// Add settings link to plugins page
+add_filter('plugin_action_links_' . plugin_basename(__FILE__), function($links) {
+    $settings_link = '<a href="' . admin_url('admin.php?page=secure-fluentform-uploads') . '">' . __('Settings') . '</a>';
+    array_unshift($links, $settings_link);
+    return $links;
+});
+
+// Utility function to get upload directory
+function sffu_get_upload_dir() {
+    $custom = get_option('sffu_upload_dir');
+    if ($custom && is_string($custom)) {
+        $dir = trailingslashit($custom);
+    } else {
+        $upload = wp_upload_dir();
+        $dir = trailingslashit($upload['basedir']) . 'fluentform-uploads/';
+    }
+    return $dir;
+}

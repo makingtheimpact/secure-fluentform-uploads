@@ -9,6 +9,10 @@ if (!defined('ABSPATH')) {
 
 class SFFU_Admin {
     private static $instance = null;
+    private $security;
+    private $file_processor;
+    private $hosting_compatibility;
+    private $ui;
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -18,29 +22,38 @@ class SFFU_Admin {
     }
 
     private function __construct() {
-        add_action('admin_menu', array($this, 'add_menu_page'));
+        $this->security = SFFU_Security::get_instance();
+        $this->file_processor = SFFU_File_Processor::get_instance();
+        $this->hosting_compatibility = SFFU_Hosting_Compatibility::get_instance();
+        $this->ui = SFFU_UI::get_instance();
+
+        add_action('admin_menu', array($this, 'add_menu_pages'));
         add_action('admin_init', array($this, 'register_settings'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action('wp_ajax_sffu_download', array($this, 'handle_download'));
+        add_action('admin_notices', array($this, 'check_server_compatibility'));
+        add_action('wp_ajax_sffu_reset_settings', array($this, 'ajax_reset_settings'));
+        
+        // Background processing hooks
+        add_action('sffu_cleanup_files_cron', array($this, 'process_cleanup_files'));
+        add_action('wp_ajax_sffu_get_task_status', array($this, 'get_task_status'));
     }
 
-    public function add_menu_page() {
-        // Add top-level menu
+    public function add_menu_pages() {
         add_menu_page(
-            'Secure FluentForm Uploads',
-            'Secure Uploads',
+            __('Secure Uploads', 'secure-fluentform-uploads'),
+            __('Secure Uploads', 'secure-fluentform-uploads'),
             'manage_options',
             'secure-fluentform-uploads',
             array($this, 'render_settings_page'),
-            'dashicons-lock',
+            'dashicons-shield',
             30
         );
 
-        // Add submenu items
         add_submenu_page(
             'secure-fluentform-uploads',
-            'Settings',
-            'Settings',
+            __('Settings', 'secure-fluentform-uploads'),
+            __('Settings', 'secure-fluentform-uploads'),
             'manage_options',
             'secure-fluentform-uploads',
             array($this, 'render_settings_page')
@@ -48,8 +61,8 @@ class SFFU_Admin {
 
         add_submenu_page(
             'secure-fluentform-uploads',
-            'Uploaded Files',
-            'Uploaded Files',
+            __('Files', 'secure-fluentform-uploads'),
+            __('Files', 'secure-fluentform-uploads'),
             'manage_options',
             'secure-fluentform-uploads-files',
             array($this, 'render_files_page')
@@ -57,11 +70,20 @@ class SFFU_Admin {
 
         add_submenu_page(
             'secure-fluentform-uploads',
-            'Activity Logs',
-            'Activity Logs',
+            __('Logs', 'secure-fluentform-uploads'),
+            __('Logs', 'secure-fluentform-uploads'),
             'manage_options',
             'secure-fluentform-uploads-logs',
             array($this, 'render_logs_page')
+        );
+
+        add_submenu_page(
+            'secure-fluentform-uploads',
+            __('Instructions', 'secure-fluentform-uploads'),
+            __('Instructions', 'secure-fluentform-uploads'),
+            'manage_options',
+            'secure-fluentform-uploads-instructions',
+            array($this, 'render_instructions_page')
         );
 
         // Add submenu under FluentForms Pro if it exists
@@ -75,337 +97,237 @@ class SFFU_Admin {
                 array($this, 'render_settings_page')
             );
         }
-
     }
 
     public function register_settings() {
-        register_setting('sffu_settings', 'sffu_upload_dir');
-        register_setting('sffu_settings', 'sffu_link_expiry_enabled');
-        register_setting('sffu_settings', 'sffu_link_expiry_interval');
-        register_setting('sffu_settings', 'sffu_link_expiry_unit');
-        register_setting('sffu_settings', 'sffu_cleanup_enabled');
-        register_setting('sffu_settings', 'sffu_cleanup_interval');
-        register_setting('sffu_settings', 'sffu_cleanup_unit');
-        register_setting('sffu_settings', 'sffu_allowed_types');
-        register_setting('sffu_settings', 'sffu_allowed_roles', array(
-            'type' => 'array',
-            'default' => array('administrator')
+        register_setting('sffu_settings', 'sffu_settings', array(
+            'sanitize_callback' => array($this, 'sanitize_settings')
         ));
-        register_setting('sffu_settings', 'sffu_keep_records_on_uninstall', array(
-            'type' => 'boolean',
-            'default' => false
-        ));
-        register_setting('sffu_settings', 'sffu_delete_files_on_uninstall', array(
-            'type' => 'boolean',
-            'default' => false
-        ));
-
-        add_settings_section(
-            'sffu_types_section',
-            'File Type Settings',
-            null,
-            'sffu_settings'
-        );
-
-        add_settings_section(
-            'sffu_roles_section',
-            'Access Control',
-            array($this, 'render_roles_section'),
-            'sffu_settings'
-        );
-
-        add_settings_section(
-            'sffu_uninstall_section',
-            'Uninstall Settings',
-            array($this, 'render_uninstall_section'),
-            'sffu_settings'
-        );
-
-        add_settings_section(
-            'sffu_link_expiry_section',
-            'Link Expiry Settings',
-            null,
-            'sffu_settings'
-        );
-
-        add_settings_section(
-            'sffu_cleanup_section',
-            'Cleanup Settings',
-            null,
-            'sffu_settings'
-        );
-
-        add_settings_field(
-            'sffu_upload_dir',
-            'Private Upload Directory',
-            array($this, 'render_upload_dir_field'),
-            'sffu_settings',
-            'sffu_types_section'
-        );
-
-        add_settings_field(
-            'sffu_allowed_types',
-            'Allowed File Types',
-            array($this, 'render_allowed_types_field'),
-            'sffu_settings',
-            'sffu_types_section'
-        );
-
-        add_settings_field(
-            'sffu_allowed_roles',
-            'Allowed Roles',
-            array($this, 'render_allowed_roles_field'),
-            'sffu_settings',
-            'sffu_roles_section'
-        );
-
-        add_settings_field(
-            'sffu_keep_records_on_uninstall',
-            'Delete file records and logs when uninstalling the plugin',
-            array($this, 'render_keep_records_field'),
-            'sffu_settings',
-            'sffu_uninstall_section'
-        );
-
-        add_settings_field(
-            'sffu_delete_files_on_uninstall',
-            'Delete Files on Uninstall',
-            array($this, 'render_delete_files_field'),
-            'sffu_settings',
-            'sffu_uninstall_section'
-        );
-
-        add_settings_field(
-            'sffu_link_expiry_enabled',
-            'Enable Link Expiry',
-            array($this, 'render_link_expiry_enabled_field'),
-            'sffu_settings',
-            'sffu_link_expiry_section'
-        );
-
-        add_settings_field(
-            'sffu_link_expiry_interval',
-            'Expiry Interval',
-            array($this, 'render_link_expiry_interval_field'),
-            'sffu_settings',
-            'sffu_link_expiry_section'
-        );
-
-        add_settings_field(
-            'sffu_cleanup_enabled',
-            'Enable Cleanup',
-            array($this, 'render_cleanup_enabled_field'),
-            'sffu_settings',
-            'sffu_cleanup_section'
-        );
-
-        add_settings_field(
-            'sffu_cleanup_interval',
-            'Cleanup Interval',
-            array($this, 'render_cleanup_interval_field'),
-            'sffu_settings',
-            'sffu_cleanup_section'
-        );
-    }
-
-    public function enqueue_scripts($hook) {
-        $valid_hooks = array(
-            'toplevel_page_secure-fluentform-uploads',
-            'secure-fluentform-uploads_page_secure-fluentform-uploads',
-            'secure-fluentform-uploads_page_secure-fluentform-uploads-files',
-            'fluent-forms_page_secure-fluentform-uploads',
-        );
-        if (!in_array($hook, $valid_hooks, true)) {
-            return;
-        }
-
-        wp_enqueue_style(
-            'sffu-admin',
-            plugins_url('assets/css/admin.css', dirname(__FILE__)),
-            array(),
-            SFFU_VERSION
-        );
-
-        wp_enqueue_script(
-            'sffu-admin',
-            plugins_url('assets/js/admin.js', dirname(__FILE__)),
-            array('jquery'),
-            SFFU_VERSION,
-            true
-        );
     }
 
     public function render_settings_page() {
         if (!current_user_can('manage_options')) {
             return;
         }
-
-        include SFFU_PLUGIN_DIR . 'templates/admin/settings.php';
+        
+        require_once SFFU_PLUGIN_DIR . 'templates/admin/settings.php';
     }
 
     public function render_files_page() {
         if (!current_user_can('manage_options')) {
             return;
         }
-        include SFFU_PLUGIN_DIR . 'templates/admin/files.php';
+        require_once SFFU_PLUGIN_DIR . 'templates/admin/files.php';
     }
 
     public function render_logs_page() {
         if (!current_user_can('manage_options')) {
             return;
         }
-        include SFFU_PLUGIN_DIR . 'templates/admin/logs.php';
+        require_once SFFU_PLUGIN_DIR . 'templates/admin/logs.php';
     }
 
-    public function render_upload_dir_field() {
-        $current_dir = get_option('sffu_upload_dir', SFFU_UPLOAD_DIR);
-        echo '<input type="text" name="sffu_upload_dir" value="' . esc_attr($current_dir) . '" size="60">';
-        echo '<p class="description">Current Directory: ' . esc_html($current_dir) . '</p>';
-        echo '<p class="description">The directory will be created automatically if it doesn\'t exist. Make sure the web server has write permissions to the parent directory.</p>';
+    public function render_instructions_page() {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        require_once SFFU_PLUGIN_DIR . 'templates/admin/instructions.php';
     }
 
-    public function render_allowed_types_field() {
-        $allowed_types = get_option('sffu_allowed_types', array(
-            'jpg','jpeg','gif','png','bmp','mp3','wav','ogg','oga','wma','mka','m4a','ra','mid','midi',
-            'avi','divx','flv','mov','ogv','mkv','mp4','m4v','mpg','mpeg','mpe','pdf','doc','ppt','pps',
-            'xls','mdb','docx','xlsx','pptx','odt','odp','ods','odg','odc','odb','odf','rtf','txt','zip',
-            'gz','gzip','rar','7z','exe','csv'
+    public function enqueue_scripts($hook) {
+        error_log('SFFU Debug - Current hook: ' . $hook);
+        
+        $valid_hooks = array(
+            'toplevel_page_secure-fluentform-uploads',
+            'secure-fluentform-uploads_page_secure-fluentform-uploads',
+            'secure-fluentform-uploads_page_secure-fluentform-uploads-files',
+            'secure-fluentform-uploads_page_secure-fluentform-uploads-logs',
+            'secure-fluentform-uploads_page_secure-fluentform-uploads-instructions',
+            'fluent-forms_page_secure-fluentform-uploads',
+        );
+        
+        if (!in_array($hook, $valid_hooks, true)) {
+            error_log('SFFU Debug - Hook not valid: ' . $hook);
+            return;
+        }
+
+        error_log('SFFU Debug - Enqueueing admin CSS');
+        wp_enqueue_style(
+            'sffu-admin',
+            SFFU_PLUGIN_URL . 'assets/css/admin.css',
+            array(),
+            SFFU_VERSION
+        );
+
+        wp_enqueue_script(
+            'sffu-admin',
+            SFFU_PLUGIN_URL . 'assets/js/admin.js',
+            array('jquery'),
+            SFFU_VERSION,
+            true
+        );
+
+        // Add task status data
+        wp_localize_script('sffu-admin', 'sffuTaskStatus', array(
+            'ajaxurl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('sffu_task_status'),
+            'checkInterval' => 5000, // Check every 5 seconds
         ));
 
-        echo '<div class="sffu-allowed-types">';
-        foreach (
-            $allowed_types as $type) {
-            echo '<label><input type="checkbox" name="sffu_allowed_types[]" class="sffu-allowed-type" value="' . esc_attr($type) . '" ' . 
-                 checked(in_array($type, $allowed_types), true, false) . '> ' . 
-                 esc_html($type) . '</label>';
+        // Add admin data
+        wp_localize_script('sffu-admin', 'sffu_admin', array(
+            'nonce' => wp_create_nonce('sffu_admin'),
+            'i18n' => array(
+                'confirm' => __('Are you sure you want to reset all settings to their default values? This action cannot be undone.', 'secure-fluentform-uploads')
+            )
+        ));
+    }
+
+    private function get_files() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'sffu_files';
+        return $wpdb->get_results("SELECT * FROM {$table_name} ORDER BY created_at DESC");
+    }
+
+    private function get_logs() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'sffu_logs';
+        return $wpdb->get_results("SELECT * FROM {$table_name} ORDER BY time DESC LIMIT 100");
+    }
+
+    public function sanitize_settings($input) {
+        $sanitized = array();
+
+        if (isset($input['upload_dir'])) {
+            $sanitized['upload_dir'] = trailingslashit(sanitize_text_field($input['upload_dir']));
         }
-        echo '</div>';
-    }
 
-    public function render_roles_section() {
-        echo '<p>Select which user roles can download files from FluentForm entries.</p>';
-    }
-
-    public function render_allowed_roles_field() {
-        $allowed_roles = get_option('sffu_allowed_roles', array('administrator'));
-        $wp_roles = wp_roles();
-        $roles = $wp_roles->get_names();
-
-        echo '<div class="sffu-allowed-roles">';
-        foreach ($roles as $role_id => $role_name) {
-            echo '<label><input type="checkbox" name="sffu_allowed_roles[]" value="' . esc_attr($role_id) . '" ' . 
-                 checked(in_array($role_id, $allowed_roles), true, false) . '> ' . 
-                 esc_html($role_name) . '</label><br>';
+        if (isset($input['max_file_size'])) {
+            $sanitized['max_file_size'] = absint($input['max_file_size']);
         }
-        echo '</div>';
+
+        if (isset($input['allowed_types'])) {
+            $sanitized['allowed_types'] = array_map('sanitize_text_field', $input['allowed_types']);
+        }
+
+        if (isset($input['allowed_roles'])) {
+            $sanitized['allowed_roles'] = array_map('sanitize_text_field', $input['allowed_roles']);
+        }
+
+        if (isset($input['encryption_key'])) {
+            $sanitized['encryption_key'] = sanitize_text_field($input['encryption_key']);
+        }
+
+        if (isset($input['file_expiry'])) {
+            $sanitized['file_expiry'] = absint($input['file_expiry']);
+        }
+
+        if (isset($input['chunk_size'])) {
+            $sanitized['chunk_size'] = absint($input['chunk_size']);
+        }
+
+        $sanitized['cleanup_enabled'] = isset($input['cleanup_enabled']);
+        
+        if (isset($input['cleanup_interval'])) {
+            $sanitized['cleanup_interval'] = absint($input['cleanup_interval']);
+        }
+
+        if (isset($input['cleanup_unit'])) {
+            $sanitized['cleanup_unit'] = in_array($input['cleanup_unit'], array('days', 'hours')) 
+                ? $input['cleanup_unit'] 
+                : 'days';
+        }
+
+        // Handle enabled_forms setting
+        if (isset($input['enabled_forms'])) {
+            if ($input['enabled_forms'] === 'all') {
+                $sanitized['enabled_forms'] = 'all';
+            } elseif (is_array($input['enabled_forms'])) {
+                $sanitized['enabled_forms'] = array_map('absint', $input['enabled_forms']);
+            }
+        } else {
+            $sanitized['enabled_forms'] = 'all'; // Default to 'all' if not set
+        }
+
+        return $sanitized;
     }
 
-    public function render_uninstall_section() {
-        echo '<p>Configure what happens when the plugin is uninstalled.</p>';
-    }
-
-    public function render_keep_records_field() {
-        $delete_records = get_option('sffu_keep_records_on_uninstall', false);
-        echo '<label>';
-        echo '<input type="checkbox" name="sffu_keep_records_on_uninstall" value="1" ' . checked($delete_records, true, false) . '>';
-        echo ' Delete file records and logs when uninstalling the plugin</label>';
-        echo '<p class="description">If checked, file records and logs will be deleted when uninstalling the plugin. If unchecked, records will be kept (default).</p>';
-    }
-
-    public function render_delete_files_field() {
-        $delete_files = get_option('sffu_delete_files_on_uninstall', false);
-        echo '<label>';
-        echo '<input type="checkbox" name="sffu_delete_files_on_uninstall" value="1" ' . checked($delete_files, true, false) . '>';
-        echo ' Delete all uploaded files when uninstalling the plugin</label>';
-        echo '<p class="description">If checked, all files in the secure uploads directory will be deleted when the plugin is uninstalled. This action cannot be undone.</p>';
-    }
-
-    public function render_link_expiry_enabled_field() {
-        $enabled = get_option('sffu_link_expiry_enabled', '1');
-        echo '<label>';
-        echo '<input type="checkbox" name="sffu_link_expiry_enabled" value="1" ' . checked($enabled, '1', false) . '>';
-        echo ' Enable automatic link expiry</label>';
-    }
-
-    public function render_link_expiry_interval_field() {
-        $interval = get_option('sffu_link_expiry_interval', '7');
-        $unit = get_option('sffu_link_expiry_unit', 'days');
-        ?>
-        <input type="number" name="sffu_link_expiry_interval" value="<?php echo esc_attr($interval); ?>" min="1" max="365">
-        <select name="sffu_link_expiry_unit">
-            <option value="days" <?php selected($unit, 'days'); ?>>Days</option>
-            <option value="hours" <?php selected($unit, 'hours'); ?>>Hours</option>
-            <option value="minutes" <?php selected($unit, 'minutes'); ?>>Minutes</option>
-        </select>
-        <?php
-    }
-
-    public function render_cleanup_enabled_field() {
-        $enabled = get_option('sffu_cleanup_enabled', '1');
-        echo '<label>';
-        echo '<input type="checkbox" name="sffu_cleanup_enabled" value="1" ' . checked($enabled, '1', false) . '>';
-        echo ' Enable automatic file cleanup</label>';
-    }
-
-    public function render_cleanup_interval_field() {
-        $interval = get_option('sffu_cleanup_interval', '30');
-        $unit = get_option('sffu_cleanup_unit', 'days');
-        ?>
-        <input type="number" name="sffu_cleanup_interval" value="<?php echo esc_attr($interval); ?>" min="1" max="365">
-        <select name="sffu_cleanup_unit">
-            <option value="days" <?php selected($unit, 'days'); ?>>Days</option>
-            <option value="hours" <?php selected($unit, 'hours'); ?>>Hours</option>
-            <option value="minutes" <?php selected($unit, 'minutes'); ?>>Minutes</option>
-        </select>
-        <?php
+    public function check_server_compatibility() {
+        $issues = $this->hosting_compatibility->check_restrictions();
+        
+        // Only show warnings if there are actual issues
+        if (!empty($issues)) {
+            $has_real_issues = false;
+            foreach ($issues as $issue) {
+                // Skip the upload size limit warning if it's the default setting
+                if (strpos($issue, 'Upload size limit too high') !== false) {
+                    $settings = get_option('sffu_settings', array());
+                    $max_file_size = isset($settings['max_file_size']) ? $settings['max_file_size'] : 10;
+                    if ($max_file_size <= 10) { // Default or reasonable size
+                        continue;
+                    }
+                }
+                $has_real_issues = true;
+                echo '<div class="sffu-notice warning">';
+                echo '<p>' . esc_html($issue) . '</p>';
+                echo '</div>';
+            }
+        }
     }
 
     public function handle_download() {
-        if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized access');
+        try {
+            if (!current_user_can('manage_options')) {
+                throw new Exception('Unauthorized access');
+            }
+
+            $file = isset($_GET['file']) ? sanitize_file_name($_GET['file']) : '';
+            if (empty($file)) {
+                throw new Exception('Invalid file');
+            }
+
+            // Verify nonce
+            if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'sffu_download_' . $file)) {
+                throw new Exception('Security check failed');
+            }
+
+            $file_path = SFFU_UPLOAD_DIR . $file;
+            if (!file_exists($file_path) || !is_readable($file_path)) {
+                throw new Exception('File not found or not readable');
+            }
+
+            // Verify file is within upload directory
+            $real_path = realpath($file_path);
+            $upload_dir = realpath(SFFU_UPLOAD_DIR);
+            if (strpos($real_path, $upload_dir) !== 0) {
+                throw new Exception('Invalid file path');
+            }
+
+            // Log the download
+            sffu_log('download', $file);
+
+            // Get the original filename from metadata
+            $metadata = get_option('sffu_file_' . md5($file));
+            $original_name = $metadata ? $metadata['original_name'] : $file;
+            $mime_type = $metadata ? $metadata['mime_type'] : 'application/octet-stream';
+
+            // Set headers
+            header('Content-Type: ' . $mime_type);
+            header('Content-Disposition: attachment; filename="' . $original_name . '"');
+            header('Content-Length: ' . filesize($file_path));
+            header('Cache-Control: no-cache, must-revalidate');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+
+            // Output file
+            if (readfile($file_path) === false) {
+                throw new Exception('Error reading file');
+            }
+            exit;
+
+        } catch (Exception $e) {
+            wp_die($e->getMessage(), 'Download Error', array('response' => 403));
         }
-
-        $file = isset($_GET['file']) ? sanitize_file_name($_GET['file']) : '';
-        if (empty($file)) {
-            wp_die('Invalid file');
-        }
-
-        // Verify nonce
-        if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'sffu_download_' . $file)) {
-            wp_die('Security check failed');
-        }
-
-        $file_path = SFFU_UPLOAD_DIR . $file;
-        if (!file_exists($file_path) || !is_readable($file_path)) {
-            wp_die('File not found or not readable');
-        }
-
-        // Verify file is within upload directory
-        $real_path = realpath($file_path);
-        $upload_dir = realpath(SFFU_UPLOAD_DIR);
-        if (strpos($real_path, $upload_dir) !== 0) {
-            wp_die('Invalid file path');
-        }
-
-        // Log the download
-        sffu_log('download', $file);
-
-        // Get the original filename from metadata
-        $metadata = get_option('sffu_file_' . md5($file));
-        $original_name = $metadata ? $metadata['original_name'] : $file;
-        $mime_type = $metadata ? $metadata['mime_type'] : 'application/octet-stream';
-
-        // Set headers
-        header('Content-Type: ' . $mime_type);
-        header('Content-Disposition: attachment; filename="' . $original_name . '"');
-        header('Content-Length: ' . filesize($file_path));
-        header('Cache-Control: no-cache, must-revalidate');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-
-        // Output file
-        readfile($file_path);
-        exit;
     }
 
     public function render_entry_files($entry_id) {
@@ -430,5 +352,153 @@ class SFFU_Admin {
             echo '</li>';
         }
         echo '</ul>';
+    }
+
+    public function get_task_status() {
+        check_ajax_referer('sffu_task_status', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Unauthorized');
+        }
+
+        $task_id = isset($_GET['task_id']) ? sanitize_text_field($_GET['task_id']) : '';
+        if (empty($task_id)) {
+            wp_send_json_error('Invalid task ID');
+        }
+
+        $status = get_option('sffu_task_' . $task_id, array(
+            'status' => 'unknown',
+            'progress' => 0,
+            'message' => '',
+            'total' => 0,
+            'processed' => 0
+        ));
+
+        wp_send_json_success($status);
+    }
+
+    public function process_cleanup_files() {
+        $task_id = 'cleanup_' . time();
+        update_option('sffu_task_' . $task_id, array(
+            'status' => 'running',
+            'progress' => 0,
+            'message' => 'Starting cleanup process...',
+            'total' => 0,
+            'processed' => 0
+        ));
+
+        try {
+            global $wpdb;
+            
+            // Get expired files
+            $expiry_interval = get_option('sffu_cleanup_interval', 30);
+            $expiry_unit = get_option('sffu_cleanup_unit', 'days');
+            $expiry_date = date('Y-m-d H:i:s', strtotime("-{$expiry_interval} {$expiry_unit}"));
+            
+            $files = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}sffu_files WHERE created_at < %s",
+                $expiry_date
+            ));
+
+            $total = count($files);
+            update_option('sffu_task_' . $task_id, array(
+                'status' => 'running',
+                'progress' => 0,
+                'message' => "Found {$total} files to process",
+                'total' => $total,
+                'processed' => 0
+            ));
+
+            $processed = 0;
+            foreach ($files as $file) {
+                $file_path = SFFU_UPLOAD_DIR . $file->filename;
+                if (file_exists($file_path)) {
+                    @unlink($file_path);
+                }
+                
+                $wpdb->delete(
+                    $wpdb->prefix . 'sffu_files',
+                    array('id' => $file->id),
+                    array('%d')
+                );
+
+                $processed++;
+                $progress = ($processed / $total) * 100;
+                
+                update_option('sffu_task_' . $task_id, array(
+                    'status' => 'running',
+                    'progress' => $progress,
+                    'message' => "Processed {$processed} of {$total} files",
+                    'total' => $total,
+                    'processed' => $processed
+                ));
+
+                // Sleep briefly to prevent server overload
+                usleep(100000); // 0.1 second
+            }
+
+            update_option('sffu_task_' . $task_id, array(
+                'status' => 'completed',
+                'progress' => 100,
+                'message' => "Cleanup completed. Processed {$processed} files.",
+                'total' => $total,
+                'processed' => $processed
+            ));
+
+        } catch (Exception $e) {
+            update_option('sffu_task_' . $task_id, array(
+                'status' => 'error',
+                'progress' => 0,
+                'message' => 'Error: ' . $e->getMessage(),
+                'total' => 0,
+                'processed' => 0
+            ));
+        }
+    }
+
+    public function render_cleanup_section() {
+        echo '<p>Configure automatic cleanup of old files.</p>';
+        echo '<div id="sffu-cleanup-status" style="display:none;">';
+        echo '<div class="sffu-progress-bar"><div class="sffu-progress"></div></div>';
+        echo '<p class="sffu-status-message"></p>';
+        echo '</div>';
+    }
+
+    public function ajax_reset_settings() {
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'sffu_admin')) {
+            wp_send_json_error(__('Security check failed.', 'secure-fluentform-uploads'));
+        }
+
+        // Check permissions
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('You do not have permission to perform this action.', 'secure-fluentform-uploads'));
+        }
+
+        // Get default settings
+        $default_settings = array(
+            'max_file_size' => min(wp_max_upload_size() / 1024 / 1024, 10),
+            'upload_dir' => WP_CONTENT_DIR . '/secure-uploads/',
+            'allowed_types' => array(
+                'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico',
+                'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'odt', 'ods', 'odp',
+                'zip', 'rar', '7z', 'tar', 'gz',
+                'mp3', 'wav', 'ogg', 'm4a', 'wma',
+                'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm',
+                'csv', 'xml', 'json'
+            ),
+            'allowed_roles' => array('administrator'),
+            'file_expiry' => 30,
+            'cleanup_enabled' => true,
+            'cleanup_interval' => 30,
+            'cleanup_unit' => 'days',
+            'cleanup_on_uninstall' => false,
+            'enabled_forms' => 'all'
+        );
+
+        // Update settings
+        update_option('sffu_settings', $default_settings);
+
+        wp_send_json_success(__('Settings have been reset to their default values.', 'secure-fluentform-uploads'));
     }
 } 

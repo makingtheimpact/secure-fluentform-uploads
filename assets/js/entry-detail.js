@@ -289,7 +289,11 @@ jQuery(document).ready(function($) {
         '.sffu-modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border-radius: 20px; border: 1px solid #888; width: 80%; max-width: 800px; position: relative; }' +
         '.sffu-close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }' +
         '.sffu-close:hover { color: black; }' +
-        '.sffu-modal-content .wp-list-table { margin-top: 20px; }' +
+        '.sffu-modal-content .wp-list-table { margin-top: 20px; table-layout: fixed; width: 100%; }' +
+        '.sffu-modal-content .wp-list-table th:nth-child(1), .sffu-modal-content .wp-list-table td:nth-child(1) { width: 50%; word-break: break-all; }' + // File Name
+        '.sffu-modal-content .wp-list-table th:nth-child(2), .sffu-modal-content .wp-list-table td:nth-child(2) { width: 22%; }' + // Upload Date
+        '.sffu-modal-content .wp-list-table th:nth-child(3), .sffu-modal-content .wp-list-table td:nth-child(3) { width: 12%; text-align: right; }' + // Size
+        '.sffu-modal-content .wp-list-table th:nth-child(4), .sffu-modal-content .wp-list-table td:nth-child(4) { width: 10%; text-align: center; }' + // Actions
         '</style>');
     $('head').append(style);
 }); 
