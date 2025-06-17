@@ -42,10 +42,12 @@ function mec_check_for_updates($transient) {
         return $transient;
     }
 
+    $plugin_slug = $plugin_basename;
+
     $proxy_url = add_query_arg(array(
-        'plugin_slug' => 'secure-fluentform-uploads',
-        'version' => $current_version,
-        'key' => 'nJ8pHP2xBGeHR23GMuFUuwkzIeCfQ9GXhMGd2tP32xoW3b51BpQbbwzaDsBPstWO',
+        'plugin_slug' => $plugin_slug,
+        'version'    => $current_version,
+        'key'        => 'nJ8pHP2xBGeHR23GMuFUuwkzIeCfQ9GXhMGd2tP32xoW3b51BpQbbwzaDsBPstWO',
     ), 'https://update.makingtheimpact.com/');
 
     try {
@@ -92,10 +94,10 @@ function mec_check_for_updates($transient) {
         if (!empty($update_data['new_version']) && !empty($update_data['package'])) {
             if (version_compare($update_data['new_version'], $current_version, '>')) {
                 $update_object = (object) array(
-                    'slug' => 'secure-fluentform-uploads',
-                    'new_version' => $update_data['new_version'],
-                    'url' => $update_data['url'] ?? '',
-                    'package' => $update_data['package'],
+                    'slug'       => $plugin_slug,
+                    'new_version'=> $update_data['new_version'],
+                    'url'        => $update_data['url'] ?? '',
+                    'package'    => $update_data['package'],
                 );
 
                 set_transient('mec_update_check', $update_object, MEC_UPDATE_CACHE_TIME);
