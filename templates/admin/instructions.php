@@ -61,7 +61,7 @@ wp_enqueue_style(
                     <li>File size restriction settings</li>
                     <li>Activity logging to monitor file access</li>
                     <li>Cleanup options to auto delete files</li>
-                    <li>Download link expiry</li>
+                    <li>Download link expiry with server-side validation</li>
                     <li>Email notifications with download links</li>
                     <li>Security best practices</li>
                 </ul>

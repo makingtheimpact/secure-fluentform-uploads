@@ -139,6 +139,12 @@ class SFFU_Core {
         if (empty($column_exists)) {
             $wpdb->query("ALTER TABLE {$files_table} ADD COLUMN submission_id BIGINT DEFAULT 0");
         }
+
+        // Check if link_created_at column exists
+        $column_exists = $wpdb->get_results("SHOW COLUMNS FROM {$files_table} LIKE 'link_created_at'");
+        if (empty($column_exists)) {
+            $wpdb->query("ALTER TABLE {$files_table} ADD COLUMN link_created_at DATETIME NULL");
+        }
     }
 
     private function create_log_table() {
@@ -173,6 +179,7 @@ class SFFU_Core {
             form_id BIGINT DEFAULT 0,
             encryption_key VARCHAR(255) NOT NULL,
             iv VARCHAR(255) NOT NULL,
+            link_created_at DATETIME NULL,
             status VARCHAR(20) DEFAULT 'active',
             UNIQUE KEY filename (filename)
         ) $charset_collate;";
@@ -514,9 +521,15 @@ class SFFU_Core {
 
     public function modify_upload_url($url, $file) {
         if (empty($url)) return $url;
-        
+
         $filename = basename($file);
         $nonce = wp_create_nonce('sffu_download_' . $filename);
+        $settings = get_option('sffu_settings', array());
+        if (!empty($settings['link_expiry_enabled'])) {
+            global $wpdb;
+            $table = $wpdb->prefix . 'sffu_files';
+            $wpdb->update($table, array('link_created_at' => current_time('mysql')), array('filename' => $filename));
+        }
         return admin_url('admin-ajax.php?action=sffu_download&file=' . urlencode($filename) . '&_wpnonce=' . $nonce . '&target=_blank');
     }
 
@@ -562,6 +575,19 @@ class SFFU_Core {
 
         if (!$file_info) {
             wp_die('File not found', 'Error', array('response' => 404));
+        }
+
+        $settings = get_option('sffu_settings', array());
+        if (!empty($settings['link_expiry_enabled']) && !empty($file_info->link_created_at)) {
+            $interval = absint($settings['link_expiry_interval'] ?? 24);
+            $unit = $settings['link_expiry_unit'] ?? 'hours';
+            $expiry = strtotime($file_info->link_created_at);
+            if ($expiry) {
+                $expiry += ('days' === $unit ? DAY_IN_SECONDS : HOUR_IN_SECONDS) * $interval;
+                if (time() > $expiry) {
+                    wp_die(__('Download link has expired.', 'secure-fluentform-uploads'), 'Error', array('response' => 403));
+                }
+            }
         }
 
         $file_path = $file_info->file_path;
@@ -1045,6 +1071,12 @@ EOD;
         }
         
         $nonce = wp_create_nonce('sffu_download_' . $filename);
+        $settings = get_option('sffu_settings', array());
+        if (!empty($settings['link_expiry_enabled'])) {
+            global $wpdb;
+            $table = $wpdb->prefix . 'sffu_files';
+            $wpdb->update($table, array('link_created_at' => current_time('mysql')), array('filename' => $filename));
+        }
         wp_send_json_success(array('nonce' => $nonce));
     }
 
