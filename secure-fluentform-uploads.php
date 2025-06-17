@@ -328,6 +328,13 @@ function sffu_log($action, $file = '', $details = '') {
     );
 }
 
+// Debug logging helper
+function sffu_debug_log($message) {
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log($message);
+    }
+}
+
 // Add settings link to plugins page
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), function($links) {
     $settings_link = '<a href="' . admin_url('admin.php?page=secure-fluentform-uploads') . '">' . __('Settings') . '</a>';

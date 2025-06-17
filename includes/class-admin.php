@@ -135,7 +135,7 @@ class SFFU_Admin {
     }
 
     public function enqueue_scripts($hook) {
-        error_log('SFFU Debug - Current hook: ' . $hook);
+        sffu_debug_log('SFFU Debug - Current hook: ' . $hook);
         
         $valid_hooks = array(
             'toplevel_page_secure-fluentform-uploads',
@@ -147,11 +147,11 @@ class SFFU_Admin {
         );
         
         if (!in_array($hook, $valid_hooks, true)) {
-            error_log('SFFU Debug - Hook not valid: ' . $hook);
+            sffu_debug_log('SFFU Debug - Hook not valid: ' . $hook);
             return;
         }
 
-        error_log('SFFU Debug - Enqueueing admin CSS');
+        sffu_debug_log('SFFU Debug - Enqueueing admin CSS');
         wp_enqueue_style(
             'sffu-admin',
             SFFU_PLUGIN_URL . 'assets/css/admin.css',
