@@ -1022,12 +1022,12 @@ EOD;
     }
 
     private function is_form_enabled($form_id) {
-        $settings = get_option('sffu_settings', array('enabled_forms' => 'all'));
-        if ($settings['enabled_forms'] === 'all') {
+        $settings = get_option('sffu_settings', array());
+        $enabled_forms = isset($settings['enabled_forms']) ? $settings['enabled_forms'] : 'all';
+        if ($enabled_forms === 'all') {
             return true;
         }
-
-        return in_array(intval($form_id), (array) $settings['enabled_forms']);
+        return in_array(intval($form_id), (array) $enabled_forms, true);
     }
 
     public function enqueue_entry_scripts($hook) {
@@ -1123,8 +1123,9 @@ EOD;
 
     public function secure_upload($file, $form_id) {
         // Check if this form should be secured
-        $settings = get_option('sffu_settings');
-        if ($settings['enabled_forms'] !== 'all' && !in_array($form_id, (array)$settings['enabled_forms'])) {
+        $settings = get_option('sffu_settings', array());
+        $enabled_forms = isset($settings['enabled_forms']) ? $settings['enabled_forms'] : 'all';
+        if ($enabled_forms !== 'all' && !in_array($form_id, (array)$enabled_forms, true)) {
             return $file; // Skip security for this form
         }
 
@@ -1132,11 +1133,12 @@ EOD;
         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
         
         // Check if file type is allowed
-        if (!in_array($ext, $settings['allowed_types'])) {
+        $allowed_types = isset($settings['allowed_types']) ? $settings['allowed_types'] : array();
+        if (!in_array($ext, $allowed_types, true)) {
             $file['error'] = sprintf(
                 __('File type .%s is not allowed. Allowed types: %s', 'secure-fluentform-uploads'),
                 $ext,
-                implode(', ', $settings['allowed_types'])
+                implode(', ', $allowed_types)
             );
             return $file;
         }
