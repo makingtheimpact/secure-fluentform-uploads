@@ -222,6 +222,18 @@ class SFFU_Admin {
             $sanitized['file_expiry'] = absint($input['file_expiry']);
         }
 
+        $sanitized['link_expiry_enabled'] = isset($input['link_expiry_enabled']);
+
+        if (isset($input['link_expiry_interval'])) {
+            $sanitized['link_expiry_interval'] = absint($input['link_expiry_interval']);
+        }
+
+        if (isset($input['link_expiry_unit'])) {
+            $sanitized['link_expiry_unit'] = in_array($input['link_expiry_unit'], array('hours', 'days'))
+                ? $input['link_expiry_unit']
+                : 'hours';
+        }
+
         if (isset($input['chunk_size'])) {
             $sanitized['chunk_size'] = absint($input['chunk_size']);
         }
@@ -489,6 +501,9 @@ class SFFU_Admin {
             ),
             'allowed_roles' => array('administrator'),
             'file_expiry' => 30,
+            'link_expiry_enabled' => false,
+            'link_expiry_interval' => 24,
+            'link_expiry_unit' => 'hours',
             'cleanup_enabled' => true,
             'cleanup_interval' => 30,
             'cleanup_unit' => 'days',

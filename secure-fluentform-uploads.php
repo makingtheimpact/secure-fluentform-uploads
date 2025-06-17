@@ -139,6 +139,15 @@ function sffu_sanitize_settings($input) {
     if (isset($input['file_expiry'])) {
         $sanitized['file_expiry'] = absint($input['file_expiry']);
     }
+
+    // Link expiry settings
+    $sanitized['link_expiry_enabled'] = isset($input['link_expiry_enabled']) ? (bool)$input['link_expiry_enabled'] : false;
+    if (isset($input['link_expiry_interval'])) {
+        $sanitized['link_expiry_interval'] = absint($input['link_expiry_interval']);
+    }
+    if (isset($input['link_expiry_unit'])) {
+        $sanitized['link_expiry_unit'] = sanitize_text_field($input['link_expiry_unit']);
+    }
     
     // Cleanup settings
     $sanitized['cleanup_enabled'] = isset($input['cleanup_enabled']) ? (bool)$input['cleanup_enabled'] : false;
@@ -187,6 +196,9 @@ function sffu_activate() {
         ),
         'allowed_roles' => array('administrator'),
         'file_expiry' => 30,
+        'link_expiry_enabled' => false,
+        'link_expiry_interval' => 24,
+        'link_expiry_unit' => 'hours',
         'cleanup_enabled' => true,
         'cleanup_interval' => 30,
         'cleanup_unit' => 'days',
@@ -258,6 +270,7 @@ function sffu_activate() {
             encryption_key VARCHAR(255),
             iv VARCHAR(255),
             upload_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+            link_created_at DATETIME NULL,
             status VARCHAR(20) DEFAULT 'active'
         ) $charset_collate;";
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');

@@ -114,6 +114,19 @@ $settings = get_option('sffu_settings', array());
                     <input type="number" id="sffu_file_expiry" name="sffu_settings[file_expiry]" value="<?php echo esc_attr($settings['file_expiry'] ?? 30); ?>" min="1" max="365">
                     <span class="description"><?php echo esc_html__('Days until files are automatically deleted', 'secure-fluentform-uploads'); ?></span>
                 </div>
+                <div class="sffu-settings-row">
+                    <label for="sffu_link_expiry_enabled"><?php echo esc_html__('Enable Link Expiry', 'secure-fluentform-uploads'); ?></label>
+                    <input type="checkbox" id="sffu_link_expiry_enabled" name="sffu_settings[link_expiry_enabled]" value="1" <?php checked(isset($settings['link_expiry_enabled']) ? $settings['link_expiry_enabled'] : false); ?>>
+                </div>
+                <div class="sffu-settings-row">
+                    <label for="sffu_link_expiry_interval"><?php echo esc_html__('Link Expiry', 'secure-fluentform-uploads'); ?></label>
+                    <input type="number" id="sffu_link_expiry_interval" name="sffu_settings[link_expiry_interval]" value="<?php echo esc_attr($settings['link_expiry_interval'] ?? 24); ?>" min="1">
+                    <select name="sffu_settings[link_expiry_unit]">
+                        <option value="hours" <?php selected($settings['link_expiry_unit'] ?? 'hours', 'hours'); ?>><?php _e('Hours', 'secure-fluentform-uploads'); ?></option>
+                        <option value="days" <?php selected($settings['link_expiry_unit'] ?? 'hours', 'days'); ?>><?php _e('Days', 'secure-fluentform-uploads'); ?></option>
+                    </select>
+                    <span class="description"><?php echo esc_html__('How long download links remain valid', 'secure-fluentform-uploads'); ?></span>
+                </div>
             </div>
         </div>
 

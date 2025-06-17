@@ -21,7 +21,7 @@ Secure FluentForm Uploads is a security enhancement plugin that works with Fluen
 * Provides admin-only access to uploaded files
 * Includes automatic file cleanup
 * Supports configurable file type restrictions
-* Implements link expiry for secure file sharing
+* Configurable download link expiry with server-side checks (links are timestamped)
 * Logs all file access attempts
 
 = Security Features =

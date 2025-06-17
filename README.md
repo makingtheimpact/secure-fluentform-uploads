@@ -44,7 +44,7 @@ The plugin can be configured through the WordPress admin panel:
 
 - Set custom upload directory
 - Configure allowed file types
-- Set link expiry duration
+- Configure download link expiry (timestamps are stored to enforce expiration)
 - Enable/disable automatic cleanup
 - View access logs
 

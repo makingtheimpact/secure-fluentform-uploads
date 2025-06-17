@@ -42,8 +42,8 @@ jQuery(document).ready(function($) {
     });
 
     // Handle link expiry settings
-    var $linkExpiryEnabled = $('input[name="sffu_link_expiry_enabled"]');
-    var $linkExpiryFields = $('input[name="sffu_link_expiry_interval"], select[name="sffu_link_expiry_unit"]');
+    var $linkExpiryEnabled = $('input[name="sffu_settings[link_expiry_enabled]"]');
+    var $linkExpiryFields = $('input[name="sffu_settings[link_expiry_interval]"], select[name="sffu_settings[link_expiry_unit]"]');
     
     function toggleLinkExpiryFields() {
         $linkExpiryFields.prop('disabled', !$linkExpiryEnabled.is(':checked'));
@@ -53,8 +53,8 @@ jQuery(document).ready(function($) {
     toggleLinkExpiryFields();
 
     // Handle cleanup settings
-    var $cleanupEnabled = $('input[name="sffu_cleanup_enabled"]');
-    var $cleanupFields = $('input[name="sffu_cleanup_interval"], select[name="sffu_cleanup_unit"]');
+    var $cleanupEnabled = $('input[name="sffu_settings[cleanup_enabled]"]');
+    var $cleanupFields = $('input[name="sffu_settings[cleanup_interval]"], select[name="sffu_settings[cleanup_unit]"]');
     
     function toggleCleanupFields() {
         $cleanupFields.prop('disabled', !$cleanupEnabled.is(':checked'));
