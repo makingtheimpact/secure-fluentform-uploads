@@ -249,6 +249,9 @@ class SFFU_Core {
 
         // Get form ID from the form object
         $form_id = $form->id;
+        if (!$this->is_form_enabled($form_id)) {
+            return;
+        }
 
         foreach ($form_data as $key => $value) {
             if (is_array($value)) {
@@ -329,6 +332,11 @@ class SFFU_Core {
             return $submission_data;
         }
 
+        $form_id = is_object($form) && isset($form->id) ? intval($form->id) : 0;
+        if (!$this->is_form_enabled($form_id)) {
+            return $submission_data;
+        }
+
         foreach ($submission_data as $key => $value) {
             if (is_array($value)) {
                 // Handle both single and multiple file uploads
@@ -344,7 +352,10 @@ class SFFU_Core {
                         $file_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $file_url);
                         
                         if (file_exists($file_path)) {
-                            $new_path = $this->modify_upload_path($file_path, array('url' => $file_url));
+                            $new_path = $this->modify_upload_path($file_path, array(
+                                'url' => $file_url,
+                                'form_id' => $form->id
+                            ));
                             if ($new_path !== $file_path) {
                                 $updated_urls[] = str_replace($upload_dir['basedir'], $upload_dir['baseurl'], $new_path);
                             } else {
@@ -367,6 +378,14 @@ class SFFU_Core {
     public function modify_upload_path($path, $file) {
         if (empty($path)) {
             sffu_log('error', 'empty_path', 'Empty path provided to modify_upload_path');
+            return $path;
+        }
+
+        $form_id = 0;
+        if (is_array($file) && isset($file['form_id'])) {
+            $form_id = intval($file['form_id']);
+        }
+        if (!$this->is_form_enabled($form_id)) {
             return $path;
         }
         
@@ -874,6 +893,9 @@ EOD;
     }
 
     public function before_file_upload($file, $form_id) {
+        if (!$this->is_form_enabled($form_id)) {
+            return;
+        }
         // Ensure upload directory exists and is writable
         if (!$this->check_upload_directory()) {
             wp_die('Upload directory is not properly configured. Please check the plugin settings and directory permissions.');
@@ -889,6 +911,10 @@ EOD;
     }
 
     public function after_file_upload($file, $form_id) {
+        if (!$this->is_form_enabled($form_id)) {
+            return;
+        }
+
         if (isset($file['tmp_name']) && file_exists($file['tmp_name'])) {
             // Add form_id to the file data
             $file['form_id'] = $form_id;
@@ -993,6 +1019,15 @@ EOD;
         }
         
         return $has_permission;
+    }
+
+    private function is_form_enabled($form_id) {
+        $settings = get_option('sffu_settings', array('enabled_forms' => 'all'));
+        if ($settings['enabled_forms'] === 'all') {
+            return true;
+        }
+
+        return in_array(intval($form_id), (array) $settings['enabled_forms']);
     }
 
     public function enqueue_entry_scripts($hook) {
