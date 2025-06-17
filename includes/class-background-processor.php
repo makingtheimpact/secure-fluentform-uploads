@@ -137,8 +137,7 @@ class SFFU_Background_Processor {
     }
 
     private function process_chunk($data, $operation) {
-        // Implement your encryption/decryption logic here
-        // This is a placeholder - you should use proper encryption
+        // Encrypt or decrypt a single chunk using AES-256-CBC
         if ($operation === 'encrypt') {
             return $this->encrypt_chunk($data);
         } else {
@@ -146,16 +145,77 @@ class SFFU_Background_Processor {
         }
     }
 
+    /**
+     * Encrypt a chunk of data using AES-256-CBC.
+     * The IV is prefixed to the returned string so chunks can be processed
+     * independently and later combined.
+     *
+     * @param string $data Plain text data to encrypt.
+     * @return string Encrypted chunk with IV prepended.
+     * @throws Exception When encryption fails.
+     */
     private function encrypt_chunk($data) {
-        // Implement your encryption logic
-        // This should use proper encryption like AES-256-GCM
-        return $data; // Placeholder
+        $key = $this->get_encryption_key();
+        $iv  = openssl_random_pseudo_bytes(16);
+
+        $encrypted = openssl_encrypt(
+            $data,
+            'aes-256-cbc',
+            $key,
+            OPENSSL_RAW_DATA,
+            $iv
+        );
+
+        if ($encrypted === false) {
+            throw new Exception('Chunk encryption failed');
+        }
+
+        return $iv . $encrypted;
     }
 
+    /**
+     * Decrypt a chunk previously encrypted with encrypt_chunk().
+     *
+     * @param string $data Encrypted chunk with IV prefixed.
+     * @return string Decrypted plain text data.
+     * @throws Exception When decryption fails or input is invalid.
+     */
     private function decrypt_chunk($data) {
-        // Implement your decryption logic
-        // This should use proper encryption like AES-256-GCM
-        return $data; // Placeholder
+        if (strlen($data) < 16) {
+            throw new Exception('Invalid encrypted chunk');
+        }
+
+        $key = $this->get_encryption_key();
+        $iv  = substr($data, 0, 16);
+        $ciphertext = substr($data, 16);
+
+        $decrypted = openssl_decrypt(
+            $ciphertext,
+            'aes-256-cbc',
+            $key,
+            OPENSSL_RAW_DATA,
+            $iv
+        );
+
+        if ($decrypted === false) {
+            throw new Exception('Chunk decryption failed');
+        }
+
+        return $decrypted;
+    }
+
+    /**
+     * Retrieve or generate the encryption key used for chunk processing.
+     *
+     * @return string Encryption key.
+     */
+    private function get_encryption_key() {
+        $key = get_option('sffu_encryption_key');
+        if (!$key) {
+            $key = wp_generate_password(64, true, true);
+            update_option('sffu_encryption_key', $key);
+        }
+        return $key;
     }
 
     public function get_file_status() {
