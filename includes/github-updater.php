@@ -15,7 +15,7 @@ function mec_check_for_updates($transient) {
             return $transient;
         }
         if (is_object($cached_response)) {
-            $transient->response['my-events-calendar/my-events-calendar.php'] = $cached_response;
+            $transient->response['secure-fluentform-uploads/secure-fluentform-uploads.php'] = $cached_response;
             return $transient;
         }
     }
@@ -23,7 +23,7 @@ function mec_check_for_updates($transient) {
     // Get the actual plugin directory name (handles both standard and development installations)
     $plugin_dir = dirname(dirname(__FILE__));
     $plugin_basename = basename($plugin_dir);
-    $plugin_file = $plugin_dir . '/my-events-calendar.php';
+    $plugin_file = $plugin_dir . '/secure-fluentform-uploads.php';
 
     // Check if plugin file exists
     if (!file_exists($plugin_file)) {
@@ -43,7 +43,7 @@ function mec_check_for_updates($transient) {
     }
 
     $proxy_url = add_query_arg(array(
-        'plugin_slug' => 'my-events-calendar',
+        'plugin_slug' => 'secure-fluentform-uploads',
         'version' => $current_version,
         'key' => 'nJ8pHP2xBGeHR23GMuFUuwkzIeCfQ9GXhMGd2tP32xoW3b51BpQbbwzaDsBPstWO',
     ), 'https://update.makingtheimpact.com/');
@@ -92,14 +92,14 @@ function mec_check_for_updates($transient) {
         if (!empty($update_data['new_version']) && !empty($update_data['package'])) {
             if (version_compare($update_data['new_version'], $current_version, '>')) {
                 $update_object = (object) array(
-                    'slug' => 'my-events-calendar',
+                    'slug' => 'secure-fluentform-uploads',
                     'new_version' => $update_data['new_version'],
                     'url' => $update_data['url'] ?? '',
                     'package' => $update_data['package'],
                 );
 
                 set_transient('mec_update_check', $update_object, MEC_UPDATE_CACHE_TIME);
-                $transient->response[$plugin_basename . '/my-events-calendar.php'] = $update_object;
+                $transient->response[$plugin_basename . '/secure-fluentform-uploads.php'] = $update_object;
             } else {
                 set_transient('mec_update_check', 'no_update', MEC_UPDATE_CACHE_TIME);
             }
