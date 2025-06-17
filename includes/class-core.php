@@ -1076,6 +1076,26 @@ EOD;
             return $file;
         }
 
-        // ... existing code ...
+        // Add form and submission information to the file array
+        $file['form_id'] = $form_id;
+
+        $submission_id = 0;
+        if (isset($_POST['_fluentform_submission_id'])) {
+            $submission_id = intval($_POST['_fluentform_submission_id']);
+        } elseif (isset($file['submission_id'])) {
+            $submission_id = intval($file['submission_id']);
+        }
+        $file['submission_id'] = $submission_id;
+
+        // Move the file to the secure directory and encrypt it
+        $new_path = $this->modify_upload_path($file['tmp_name'], $file);
+
+        if ($new_path && $new_path !== $file['tmp_name']) {
+            $file['file'] = $new_path;
+            $file['url']  = $this->modify_upload_url($new_path, $new_path);
+            $file['tmp_name'] = $new_path;
+        }
+
+        return $file;
     }
-} 
+}
