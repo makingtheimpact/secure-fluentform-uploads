@@ -17,7 +17,6 @@ class SFFU_Core {
     private $cipher_key;
     private $file_expiry;
     private $cleanup_expiry;
-    private $updater;
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -85,7 +84,6 @@ class SFFU_Core {
 
     private function init_updater() {
         require_once plugin_dir_path(dirname(__FILE__)) . 'includes/github-updater.php';
-        $this->updater = SFFU_Updater::get_instance();
     }
 
     public function activate() {
