@@ -1,9 +1,7 @@
 jQuery(document).ready(function($) {
-    console.log('SFFU Entry Detail script loaded');
     
     // Only proceed if user has access
     if (!sffuEntry.canAccess) {
-        console.log('User does not have access to secure downloads');
         return;
     }
 
@@ -11,30 +9,22 @@ jQuery(document).ready(function($) {
     const formId = sffuEntry.formId;
     let currentSubmissionId = null;
 
-    console.log('Form ID:', formId);
-    console.log('Current URL:', window.location.href);
-
     if (!formId) {
-        console.log('Missing form ID');
         return;
     }
 
     // Function to get submission ID from URL hash
     function getSubmissionIdFromHash() {
         const hash = window.location.hash;
-        console.log('Current hash:', hash);
         const match = hash.match(/\/entries\/(\d+)/);
         const id = match ? match[1] : null;
-        console.log('Extracted submission ID:', id);
         return id;
     }
 
     // Function to create the downloads modal
     function createDownloadsModal(files) {
-        console.log('Creating downloads modal with files:', files);
         
         if (!files || files.length === 0) {
-            console.log('No files to display');
             return;
         }
 
@@ -134,11 +124,8 @@ jQuery(document).ready(function($) {
         $('#wp-admin-bar-sffu-view-downloads').remove();
 
         if (!currentSubmissionId) {
-            console.log('No submission ID available for button creation');
             return;
         }
-
-        console.log('Creating button with submission ID:', currentSubmissionId);
 
         // Create new menu item
         var menuItem = $('<li id="wp-admin-bar-sffu-view-downloads"><a href="#" class="ab-item">View Downloads</a></li>');
@@ -151,21 +138,10 @@ jQuery(document).ready(function($) {
             $('#wp-admin-bar-top-secondary, #wp-admin-bar-root-default').append(menuItem);
         }
 
-        // Test click handler immediately
-        console.log('Testing click handler...');
-        menuItem.find('a').trigger('click');
-
         // Click handler
         menuItem.find('a').on('click', function(e) {
-            console.log('Click handler triggered');
             e.preventDefault();
             e.stopPropagation();
-            
-            console.log('Button clicked');
-            console.log('Current submission ID:', currentSubmissionId);
-            console.log('Form ID:', formId);
-            console.log('AJAX URL:', sffuEntry.ajaxurl);
-            console.log('Nonce:', sffuEntry.nonce);
             
             if (!currentSubmissionId) {
                 console.error('No submission ID available');
@@ -192,12 +168,9 @@ jQuery(document).ready(function($) {
                     form_id: formId
                 },
                 beforeSend: function() {
-                    console.log('Sending AJAX request...');
                 },
                 success: function(response) {
-                    console.log('AJAX response received:', response);
                     if (response.success && response.data) {
-                        console.log('Creating modal with data:', response.data);
                         createDownloadsModal(response.data);
                     } else {
                         console.error('AJAX response error:', response);
@@ -215,12 +188,8 @@ jQuery(document).ready(function($) {
 
         // Also bind click handler to document for event delegation
         $(document).on('click', '#wp-admin-bar-sffu-view-downloads a', function(e) {
-            console.log('Document click handler triggered');
             e.preventDefault();
             e.stopPropagation();
-            
-            console.log('Button clicked via document handler');
-            console.log('Current submission ID:', currentSubmissionId);
             
             if (!currentSubmissionId) {
                 console.error('No submission ID available');
@@ -237,12 +206,9 @@ jQuery(document).ready(function($) {
                     form_id: formId
                 },
                 beforeSend: function() {
-                    console.log('Sending AJAX request via document handler...');
                 },
                 success: function(response) {
-                    console.log('AJAX response received via document handler:', response);
                     if (response.success && response.data) {
-                        console.log('Creating modal with data:', response.data);
                         createDownloadsModal(response.data);
                     } else {
                         console.error('AJAX response error:', response);
@@ -271,7 +237,6 @@ jQuery(document).ready(function($) {
     setInterval(function() {
         const currentHash = window.location.hash;
         if (currentHash !== lastHash) {
-            console.log('URL hash changed from', lastHash, 'to', currentHash);
             lastHash = currentHash;
             
             // Get new submission ID
