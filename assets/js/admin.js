@@ -331,7 +331,7 @@ jQuery(document).ready(function($) {
         }
         
         var $button = $(this);
-        $button.prop('disabled', true);;ohtdsrk;o
+        $button.prop('disabled', true);
         
         
         $.ajax({
