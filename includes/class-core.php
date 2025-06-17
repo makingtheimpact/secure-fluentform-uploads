@@ -84,7 +84,7 @@ class SFFU_Core {
     }
 
     private function init_updater() {
-        require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-updater.php';
+        require_once plugin_dir_path(dirname(__FILE__)) . 'includes/github-updater.php';
         $this->updater = SFFU_Updater::get_instance();
     }
 
