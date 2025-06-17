@@ -8,8 +8,8 @@ if (!defined('ABSPATH')) {
 }
 
 // Enable error reporting for debugging
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+// error_reporting(E_ALL);
+// ini_set('display_errors', 1);
 
 class SFFU_Core {
     private static $instance = null;
@@ -370,7 +370,7 @@ class SFFU_Core {
         $ext = pathinfo($filename, PATHINFO_EXTENSION);
         
         // Debug log upload directory
-        error_log('Debug: Upload directory: ' . $this->upload_dir);
+        sffu_debug_log('Debug: Upload directory: ' . $this->upload_dir);
         
         // Verify upload directory exists and is writable
         if (!file_exists($this->upload_dir)) {
@@ -384,7 +384,7 @@ class SFFU_Core {
         }
         
         // Debug log
-        error_log('Debug: Starting file processing for ' . $filename);
+        sffu_debug_log('Debug: Starting file processing for ' . $filename);
         
         // Verify file exists and is readable
         if (!is_readable($path)) {
@@ -393,13 +393,13 @@ class SFFU_Core {
         }
         
         // Read the original file content
-        error_log('Debug: Attempting to read file: ' . $path);
+        sffu_debug_log('Debug: Attempting to read file: ' . $path);
         $file_content = file_get_contents($path);
         if ($file_content === false) {
             sffu_log('error', $filename, 'Failed to read file content');
             return $path;
         }
-        error_log('Debug: Successfully read file content, size: ' . strlen($file_content));
+        sffu_debug_log('Debug: Successfully read file content, size: ' . strlen($file_content));
 
         // Generate new secure filename with timestamp and random bytes
         $timestamp = time();
@@ -407,39 +407,39 @@ class SFFU_Core {
         $new_filename = $random_bytes . '_' . $timestamp . '.php';
         $new_path = $this->upload_dir . $new_filename;
         
-        error_log('Debug: Generated new filename: ' . $new_filename);
-        error_log('Debug: New file path: ' . $new_path);
+        sffu_debug_log('Debug: Generated new filename: ' . $new_filename);
+        sffu_debug_log('Debug: New file path: ' . $new_path);
         
         // Generate encryption key and IV
         $encryption_key = bin2hex(random_bytes(32));
         $iv = openssl_random_pseudo_bytes(16);
         
         // Debug log
-        error_log('Debug: Generated IV length: ' . strlen($iv));
+        sffu_debug_log('Debug: Generated IV length: ' . strlen($iv));
         
         // Encrypt the file content with error checking
-        error_log('Debug: Attempting encryption');
+        sffu_debug_log('Debug: Attempting encryption');
         $encrypted_content = openssl_encrypt($file_content, 'aes-256-cbc', $encryption_key, OPENSSL_RAW_DATA, $iv);
         if ($encrypted_content === false) {
             sffu_log('error', $filename, 'Encryption failed: ' . openssl_error_string());
             return $path;
         }
-        error_log('Debug: Encryption successful, encrypted size: ' . strlen($encrypted_content));
+        sffu_debug_log('Debug: Encryption successful, encrypted size: ' . strlen($encrypted_content));
         
         // Encode the encrypted content and IV
         $encoded_content = '<?php exit; ?>' . base64_encode($iv . $encrypted_content);
 
-        error_log('Debug: Encoded content length: ' . strlen($encoded_content));
+        sffu_debug_log('Debug: Encoded content length: ' . strlen($encoded_content));
         
         // Proceed with encryption and save the encrypted file
         $new_filename = $random_bytes . '_' . $timestamp . '.php';
         $new_path = $this->upload_dir . $new_filename;
-        error_log('Debug: Attempting to save encrypted file to: ' . $new_path);
+        sffu_debug_log('Debug: Attempting to save encrypted file to: ' . $new_path);
         if (file_put_contents($new_path, $encoded_content) === false) {
             error_log('Error: Failed to write encrypted file: ' . $new_path);
             return $path;
         }
-        error_log('Debug: Successfully wrote encrypted file');
+        sffu_debug_log('Debug: Successfully wrote encrypted file');
         
         // Verify file existence after writing
         if (!file_exists($new_path)) {
@@ -495,7 +495,7 @@ class SFFU_Core {
             @unlink($new_path);
             return $path;
         }
-        error_log('Debug: File metadata stored successfully in database');
+        sffu_debug_log('Debug: File metadata stored successfully in database');
         
         // Log the action
         sffu_log('upload', $new_filename);
@@ -503,7 +503,7 @@ class SFFU_Core {
         // Only remove original file if we successfully moved and encrypted it
         if (file_exists($new_path) && filesize($new_path) > 0) {
             @unlink($path);
-            error_log('Debug: Successfully moved and encrypted file');
+            sffu_debug_log('Debug: Successfully moved and encrypted file');
         } else {
             sffu_log('error', $filename, 'New file not created successfully, keeping original');
             return $path;
@@ -911,7 +911,7 @@ EOD;
             dbDelta($sql);
             
             // Log table creation
-            error_log('SFFU: Created logs table');
+            sffu_debug_log('SFFU: Created logs table');
         }
     }
 
@@ -984,14 +984,14 @@ EOD;
         $form_id = isset($_GET['form_id']) ? intval($_GET['form_id']) : 0;
 
         // Debug logging
-        error_log('Debug: SFFU - Current hook: ' . $hook);
-        error_log('Debug: SFFU - Is entries page: ' . ($is_entries_page ? 'yes' : 'no'));
-        error_log('Debug: SFFU - Form ID: ' . $form_id);
-        error_log('Debug: SFFU - GET params: ' . print_r($_GET, true));
+        sffu_debug_log('Debug: SFFU - Current hook: ' . $hook);
+        sffu_debug_log('Debug: SFFU - Is entries page: ' . ($is_entries_page ? 'yes' : 'no'));
+        sffu_debug_log('Debug: SFFU - Form ID: ' . $form_id);
+        sffu_debug_log('Debug: SFFU - GET params: ' . print_r($_GET, true));
 
         // Only proceed if we have form_id and are on entries page
         if (!$is_entries_page || !$form_id) {
-            error_log('Debug: SFFU - Not loading script - missing required parameters');
+            sffu_debug_log('Debug: SFFU - Not loading script - missing required parameters');
             return;
         }
 
@@ -1011,7 +1011,7 @@ EOD;
             'formId' => $form_id
         ));
 
-        error_log('Debug: SFFU - Script enqueued successfully');
+        sffu_debug_log('Debug: SFFU - Script enqueued successfully');
     }
 
     public function ajax_get_submission_files() {
