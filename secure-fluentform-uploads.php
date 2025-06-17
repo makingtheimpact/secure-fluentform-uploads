@@ -277,8 +277,6 @@ function sffu_activate() {
         dbDelta($sql);
     }
 
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-    dbDelta($sql);
 
     // Set version
     update_option('sffu_version', SFFU_VERSION);
