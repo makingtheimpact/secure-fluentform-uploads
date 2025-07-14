@@ -3,7 +3,7 @@ Contributors: makingtheimpact
 Tags: fluentform, security, uploads, encryption, private-files
 Requires at least: 5.0
 Tested up to: 6.4
-Stable tag: 1.0
+Stable tag: 1.0.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,10 +64,13 @@ The plugin uses AES-256-CBC encryption for both file content and metadata, with 
 
 == Changelog ==
 
+= 1.0.3 =
+* Allow pages to load inside iframes by using SAMEORIGIN frame options
+
 = 1.0 =
 * Initial release
 
 == Upgrade Notice ==
 
 = 1.0 =
-Initial release 
+Initial release

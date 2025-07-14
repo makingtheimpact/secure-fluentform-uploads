@@ -62,7 +62,7 @@ class SFFU_Security {
     public function init_security_headers() {
         if (!is_admin()) {
             header('X-Content-Type-Options: nosniff');
-            header('X-Frame-Options: DENY');
+            header('X-Frame-Options: ' . apply_filters('sffu_frame_options', 'SAMEORIGIN'));
             header('X-XSS-Protection: 1; mode=block');
             header('Referrer-Policy: strict-origin-when-cross-origin');
         }
