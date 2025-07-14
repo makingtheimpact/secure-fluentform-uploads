@@ -651,7 +651,7 @@ class SFFU_Core {
 
         // Set security headers
         header('X-Content-Type-Options: nosniff');
-        header('X-Frame-Options: DENY');
+        header('X-Frame-Options: ' . apply_filters('sffu_frame_options', 'SAMEORIGIN'));
         header('X-XSS-Protection: 1; mode=block');
         header('Content-Type: ' . $file_info->mime_type);
         header('Content-Disposition: attachment; filename="' . $file_info->original_name . '"');

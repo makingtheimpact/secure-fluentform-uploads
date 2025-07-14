@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Secure FluentForm Uploads
  * Description: Moves FluentForm uploads to a private folder, renames them, encrypts metadata, and allows admin-only access.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: Making The Impact LLC
  * Requires at least: 5.6
  * Requires PHP: 7.2
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('SFFU_VERSION', '1.0.2');
+define('SFFU_VERSION', '1.0.3');
 define('SFFU_PLUGIN_FILE', __FILE__);
 define('SFFU_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SFFU_PLUGIN_URL', plugin_dir_url(__FILE__));
