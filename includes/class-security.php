@@ -105,7 +105,7 @@ class SFFU_Security {
 
     public function validate_file_path($path) {
         $real_path = realpath($path);
-        $upload_dir = realpath(SFFU_UPLOAD_DIR);
+        $upload_dir = realpath(sffu_get_upload_dir());
         
         if ($real_path === false || $upload_dir === false) {
             return false;

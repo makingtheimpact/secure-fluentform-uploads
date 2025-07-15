@@ -76,7 +76,8 @@ class SFFU_Core {
     }
 
     private function init_constants() {
-        $this->upload_dir = get_option('sffu_upload_dir', WP_CONTENT_DIR . '/secure-uploads/');
+        $settings = get_option('sffu_settings', array());
+        $this->upload_dir = trailingslashit($settings['upload_dir'] ?? WP_CONTENT_DIR . '/secure-uploads/');
         $this->cipher_key = defined('SFFU_CIPHER_KEY') ? SFFU_CIPHER_KEY : wp_generate_password(64, true, true);
         $this->file_expiry = defined('SFFU_FILE_EXPIRY') ? SFFU_FILE_EXPIRY : 7 * 24 * 60 * 60;
         $this->cleanup_expiry = defined('SFFU_CLEANUP_EXPIRY') ? SFFU_CLEANUP_EXPIRY : 30 * 24 * 60 * 60;
@@ -685,7 +686,8 @@ class SFFU_Core {
     }
 
     public function check_upload_directory() {
-        $upload_dir = get_option('sffu_upload_dir', WP_CONTENT_DIR . '/secure-uploads/');
+        $settings = get_option('sffu_settings', array());
+        $upload_dir = trailingslashit($settings['upload_dir'] ?? WP_CONTENT_DIR . '/secure-uploads/');
         $old_upload_dir = $this->upload_dir;
         
         // If directory has changed, move files
@@ -834,6 +836,9 @@ EOD;
             }
             chmod($index, 0644);
         }
+
+        // Update internal reference for subsequent operations
+        $this->upload_dir = $upload_dir;
 
         return true;
     }

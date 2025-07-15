@@ -157,7 +157,7 @@ class SFFU_File_Processor {
     }
 
     public function cleanup_temp_files() {
-        $temp_files = glob(SFFU_UPLOAD_DIR . '*.tmp');
+        $temp_files = glob(sffu_get_upload_dir() . '*.tmp');
         foreach ($temp_files as $file) {
             if (filemtime($file) < time() - 3600) { // Older than 1 hour
                 @unlink($file);

@@ -127,7 +127,7 @@ class SFFU_Hosting_Compatibility {
     }
 
     private function check_file_operations() {
-        $test_file = SFFU_UPLOAD_DIR . 'test_' . time() . '.txt';
+        $test_file = sffu_get_upload_dir() . 'test_' . time() . '.txt';
         $result = false;
 
         try {
@@ -186,7 +186,7 @@ class SFFU_Hosting_Compatibility {
 
     public function cleanup_on_uninstall() {
         if (get_option('sffu_delete_files_on_uninstall', false)) {
-            $this->recursive_delete(SFFU_UPLOAD_DIR);
+            $this->recursive_delete(sffu_get_upload_dir());
         }
     }
 

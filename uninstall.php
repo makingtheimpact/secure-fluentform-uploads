@@ -10,7 +10,7 @@ $settings = get_option('sffu_settings', array());
 // Only proceed with deletion if explicitly enabled
 if (!empty($settings['cleanup_on_uninstall'])) {
     // Delete all files
-    $upload_dir = get_option('sffu_upload_dir', WP_CONTENT_DIR . '/secure-uploads/');
+    $upload_dir = trailingslashit($settings['upload_dir'] ?? WP_CONTENT_DIR . '/secure-uploads/');
     if (is_dir($upload_dir)) {
         $files = glob($upload_dir . '*');
         foreach ($files as $file) {
@@ -30,7 +30,6 @@ if (!empty($settings['cleanup_on_uninstall'])) {
 // Always delete options
 delete_option('sffu_settings');
 delete_option('sffu_version');
-delete_option('sffu_upload_dir');
 delete_option('sffu_link_expiry_enabled');
 delete_option('sffu_link_expiry_interval');
 delete_option('sffu_link_expiry_unit');

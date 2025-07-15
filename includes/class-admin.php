@@ -303,14 +303,14 @@ class SFFU_Admin {
                 throw new Exception('Security check failed');
             }
 
-            $file_path = SFFU_UPLOAD_DIR . $file;
+            $file_path = sffu_get_upload_dir() . $file;
             if (!file_exists($file_path) || !is_readable($file_path)) {
                 throw new Exception('File not found or not readable');
             }
 
             // Verify file is within upload directory
             $real_path = realpath($file_path);
-            $upload_dir = realpath(SFFU_UPLOAD_DIR);
+            $upload_dir = realpath(sffu_get_upload_dir());
             if (strpos($real_path, $upload_dir) !== 0) {
                 throw new Exception('Invalid file path');
             }
@@ -423,7 +423,7 @@ class SFFU_Admin {
 
             $processed = 0;
             foreach ($files as $file) {
-                $file_path = SFFU_UPLOAD_DIR . $file->filename;
+                $file_path = sffu_get_upload_dir() . $file->filename;
                 if (file_exists($file_path)) {
                     @unlink($file_path);
                 }
