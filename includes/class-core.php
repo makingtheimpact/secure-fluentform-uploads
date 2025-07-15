@@ -906,10 +906,24 @@ EOD;
             wp_die('Upload directory is not properly configured. Please check the plugin settings and directory permissions.');
         }
         
-        // Verify file type
-        if (isset($file['type'])) {
-            $allowed_types = get_option('sffu_allowed_types', array_keys(SFFU_ALLOWED_MIME_TYPES));
-            if (!in_array($file['type'], $allowed_types)) {
+        // Verify file type based on extension and MIME
+        if (isset($file['type']) && isset($file['name'])) {
+            $settings = get_option('sffu_settings', array());
+            $allowed_exts = $settings['allowed_types'] ?? array();
+
+            $mime_map = wp_get_mime_types();
+            $allowed_mimes = array();
+            foreach ($mime_map as $exts => $mime) {
+                foreach (explode('|', $exts) as $ext) {
+                    if (in_array($ext, $allowed_exts, true)) {
+                        $allowed_mimes = array_merge($allowed_mimes, array_map('trim', explode('|', $mime)));
+                    }
+                }
+            }
+            $allowed_mimes = array_intersect($allowed_mimes, SFFU_ALLOWED_MIME_TYPES);
+
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowed_exts, true) || !in_array($file['type'], $allowed_mimes, true)) {
                 wp_die('File type not allowed.');
             }
         }
@@ -984,7 +998,6 @@ EOD;
             // Delete options
             delete_option('sffu_keep_records_on_uninstall');
             delete_option('sffu_allowed_roles');
-            delete_option('sffu_allowed_types');
             delete_option('sffu_cleanup_enabled');
         }
     }

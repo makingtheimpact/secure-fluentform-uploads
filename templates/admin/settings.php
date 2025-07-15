@@ -60,6 +60,7 @@ $settings = get_option('sffu_settings', array());
                                 'Archives' => array('zip', 'rar', '7z', 'tar', 'gz'),
                                 'Audio' => array('mp3', 'wav', 'ogg', 'm4a', 'wma'),
                                 'Video' => array('mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'),
+                                'Executable' => array('exe', 'msi'),
                                 'Other' => array('csv', 'xml', 'json')
                             );
                             
@@ -67,11 +68,13 @@ $settings = get_option('sffu_settings', array());
                                 echo '<div class="sffu-file-category">';
                                 echo '<h4>' . esc_html($category) . '</h4>';
                                 foreach ($types as $type) {
+                                    $warning = ($category === 'Executable') ? ' <span class="warning">(risk of malicious uploads)</span>' : '';
                                     printf(
-                                        '<label><input type="checkbox" name="sffu_settings[allowed_types][]" value="%s" %s> %s</label>',
+                                        '<label><input type="checkbox" name="sffu_settings[allowed_types][]" value="%s" %s> %s%s</label>',
                                         esc_attr($type),
                                         in_array($type, $settings['allowed_types'] ?? array()) ? 'checked' : '',
-                                        esc_html(strtoupper($type))
+                                        esc_html(strtoupper($type)),
+                                        $warning
                                     );
                                 }
                                 echo '</div>';

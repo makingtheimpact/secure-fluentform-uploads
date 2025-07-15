@@ -36,7 +36,6 @@ delete_option('sffu_link_expiry_unit');
 delete_option('sffu_cleanup_enabled');
 delete_option('sffu_cleanup_interval');
 delete_option('sffu_cleanup_unit');
-delete_option('sffu_allowed_types');
 delete_option('sffu_allowed_roles');
 delete_option('sffu_file_cipher_key');
 delete_option('sffu_keep_records_on_uninstall');
