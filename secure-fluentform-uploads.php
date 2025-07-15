@@ -298,7 +298,7 @@ function sffu_uninstall() {
     
     if (!empty($settings['cleanup_on_uninstall'])) {
         // Delete all files
-        $upload_dir = SFFU_UPLOAD_DIR;
+        $upload_dir = sffu_get_upload_dir();
         if (is_dir($upload_dir)) {
             $files = glob($upload_dir . '*');
             foreach ($files as $file) {
@@ -355,12 +355,10 @@ add_filter('plugin_action_links_' . plugin_basename(__FILE__), function($links) 
 
 // Utility function to get upload directory
 function sffu_get_upload_dir() {
-    $custom = get_option('sffu_upload_dir');
-    if ($custom && is_string($custom)) {
-        $dir = trailingslashit($custom);
-    } else {
-        $upload = wp_upload_dir();
-        $dir = trailingslashit($upload['basedir']) . 'fluentform-uploads/';
+    $settings = get_option('sffu_settings', array());
+    if (!empty($settings['upload_dir']) && is_string($settings['upload_dir'])) {
+        return trailingslashit($settings['upload_dir']);
     }
-    return $dir;
+
+    return WP_CONTENT_DIR . '/secure-uploads/';
 }

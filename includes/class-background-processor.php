@@ -63,7 +63,7 @@ class SFFU_Background_Processor {
             ));
 
             // Get file information
-            $file_path = SFFU_UPLOAD_DIR . $file_id;
+            $file_path = sffu_get_upload_dir() . $file_id;
             if (!file_exists($file_path)) {
                 throw new Exception('File not found');
             }
