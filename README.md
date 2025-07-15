@@ -48,6 +48,15 @@ The plugin can be configured through the WordPress admin panel:
 - Enable/disable automatic cleanup
 - View access logs
 
+## Testing
+
+To verify file type restrictions:
+
+1. In plugin settings, allow only a specific extension (for example `pdf`).
+2. Upload a file with that extension through a FluentForm field—upload should succeed.
+3. Attempt to upload a file with a disallowed extension (for example `exe`).
+   The submission should be blocked with a "File type not allowed" message.
+
 ## Support
 
 For support, please [open an issue](https://github.com/makingtheimpact/secure-fluentform-uploads/issues) on GitHub.
