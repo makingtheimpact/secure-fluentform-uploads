@@ -362,3 +362,62 @@ function sffu_get_upload_dir() {
 
     return WP_CONTENT_DIR . '/secure-uploads/';
 }
+
+// -----------------------------------------------------------------------------
+// Shortcode and email helpers
+// -----------------------------------------------------------------------------
+
+// Capture the current submission context so the shortcode can access it later.
+function sffu_set_current_submission_context( $submission_id, $form_data, $form ) {
+    $GLOBALS['sffu_current_submission_id'] = absint( $submission_id );
+    $GLOBALS['sffu_current_form_id']       = is_object( $form ) ? absint( $form->id ) : 0;
+}
+add_action( 'fluentform_submission_inserted', 'sffu_set_current_submission_context', 5, 3 );
+
+// Shortcode to output download links for the current submission.
+function sffu_shortcode_download_links( $atts = array() ) {
+    $atts = shortcode_atts(
+        array(
+            'submission_id' => 0,
+            'form_id'       => 0,
+        ),
+        $atts,
+        'sffu_download_links'
+    );
+
+    if ( ! $atts['submission_id'] && isset( $GLOBALS['sffu_current_submission_id'] ) ) {
+        $atts['submission_id'] = absint( $GLOBALS['sffu_current_submission_id'] );
+    }
+
+    if ( ! $atts['form_id'] && isset( $GLOBALS['sffu_current_form_id'] ) ) {
+        $atts['form_id'] = absint( $GLOBALS['sffu_current_form_id'] );
+    }
+
+    if ( ! $atts['submission_id'] || ! $atts['form_id'] ) {
+        return '';
+    }
+
+    $core  = SFFU_Core::get_instance();
+    $files = $core->get_submission_files( $atts['submission_id'], $atts['form_id'] );
+    if ( empty( $files ) ) {
+        return '';
+    }
+
+    $output = '<ul class="sffu-download-links">';
+    foreach ( $files as $file ) {
+        $url     = $core->modify_upload_url( $file->file_path, $file->file_path );
+        $output .= '<li><a href="' . esc_url( $url ) . '">' . esc_html( $file->original_name ) . '</a></li>';
+    }
+    $output .= '</ul>';
+
+    return $output;
+}
+add_shortcode( 'sffu_download_links', 'sffu_shortcode_download_links' );
+
+// Ensure shortcodes are parsed in emails.
+add_filter( 'wp_mail', function ( $args ) {
+    if ( isset( $args['message'] ) ) {
+        $args['message'] = do_shortcode( $args['message'] );
+    }
+    return $args;
+} );
