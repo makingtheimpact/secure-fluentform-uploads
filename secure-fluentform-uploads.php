@@ -393,6 +393,19 @@ function sffu_shortcode_download_links( $atts = array() ) {
         $atts['form_id'] = absint( $GLOBALS['sffu_current_form_id'] );
     }
 
+    // Fallback to request parameters if values are still missing.
+    if ( ! $atts['submission_id'] ) {
+        if ( isset( $_REQUEST['submission_id'] ) ) {
+            $atts['submission_id'] = absint( $_REQUEST['submission_id'] );
+        } elseif ( isset( $_REQUEST['entry_id'] ) ) {
+            $atts['submission_id'] = absint( $_REQUEST['entry_id'] );
+        }
+    }
+
+    if ( ! $atts['form_id'] && isset( $_REQUEST['form_id'] ) ) {
+        $atts['form_id'] = absint( $_REQUEST['form_id'] );
+    }
+
     if ( ! $atts['submission_id'] || ! $atts['form_id'] ) {
         return '';
     }
