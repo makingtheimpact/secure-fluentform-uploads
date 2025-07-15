@@ -3,7 +3,7 @@ Contributors: makingtheimpact
 Tags: fluentform, security, uploads, encryption, private-files
 Requires at least: 5.0
 Tested up to: 6.4
-Stable tag: 1.0.3
+Stable tag: 1.0.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,6 +22,7 @@ Secure FluentForm Uploads is a security enhancement plugin that works with Fluen
 * Includes automatic file cleanup
 * Supports configurable file type restrictions
 * Configurable download link expiry with server-side checks (links are timestamped)
+* Optional login requirement for download links
 * Logs all file access attempts
 
 = Security Features =
@@ -64,6 +65,9 @@ The plugin uses AES-256-CBC encryption for both file content and metadata, with 
 
 == Changelog ==
 
+= 1.0.4 =
+* Added option to require login for download links (disabled by default)
+
 = 1.0.3 =
 * Allow pages to load inside iframes by using SAMEORIGIN frame options
 
@@ -71,6 +75,9 @@ The plugin uses AES-256-CBC encryption for both file content and metadata, with 
 * Initial release
 
 == Upgrade Notice ==
+
+= 1.0.4 =
+Adds setting to optionally require login for download links.
 
 = 1.0 =
 Initial release

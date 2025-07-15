@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Secure FluentForm Uploads
  * Description: Moves FluentForm uploads to a private folder, renames them, encrypts metadata, and allows admin-only access.
- * Version: 1.0.3
+ * Version: 1.0.4
  * Author: Making The Impact LLC
  * Requires at least: 5.6
  * Requires PHP: 7.2
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('SFFU_VERSION', '1.0.3');
+define('SFFU_VERSION', '1.0.4');
 define('SFFU_PLUGIN_FILE', __FILE__);
 define('SFFU_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SFFU_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -148,6 +148,9 @@ function sffu_sanitize_settings($input) {
     if (isset($input['link_expiry_unit'])) {
         $sanitized['link_expiry_unit'] = sanitize_text_field($input['link_expiry_unit']);
     }
+
+    // Login requirement for download links
+    $sanitized['require_login_for_links'] = isset($input['require_login_for_links']) ? (bool)$input['require_login_for_links'] : false;
     
     // Cleanup settings
     $sanitized['cleanup_enabled'] = isset($input['cleanup_enabled']) ? (bool)$input['cleanup_enabled'] : false;
@@ -199,6 +202,7 @@ function sffu_activate() {
         'link_expiry_enabled' => false,
         'link_expiry_interval' => 24,
         'link_expiry_unit' => 'hours',
+        'require_login_for_links' => false,
         'cleanup_enabled' => true,
         'cleanup_interval' => 30,
         'cleanup_unit' => 'days',
