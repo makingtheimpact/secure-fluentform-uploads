@@ -11,6 +11,7 @@ A WordPress plugin that enhances FluentForm upload security by implementing priv
 - 🧹 Automatic file cleanup
 - 📝 Configurable file type restrictions
 - ⏱️ Link expiry for secure file sharing
+- 🔗 Optional login requirement for download links
 - 📊 Access logging
 
 ## Requirements
@@ -45,6 +46,7 @@ The plugin can be configured through the WordPress admin panel:
 - Set custom upload directory
 - Configure allowed file types
 - Configure download link expiry (timestamps are stored to enforce expiration)
+- Toggle whether download links require user login
 - Enable/disable automatic cleanup
 - View access logs
 

@@ -127,6 +127,11 @@ $settings = get_option('sffu_settings', array());
                     </select>
                     <span class="description"><?php echo esc_html__('How long download links remain valid', 'secure-fluentform-uploads'); ?></span>
                 </div>
+                <div class="sffu-settings-row">
+                    <label for="sffu_require_login_for_links"><?php echo esc_html__('Require Login for Downloads', 'secure-fluentform-uploads'); ?></label>
+                    <input type="checkbox" id="sffu_require_login_for_links" name="sffu_settings[require_login_for_links]" value="1" <?php checked(isset($settings['require_login_for_links']) ? $settings['require_login_for_links'] : false); ?>>
+                    <span class="description"><?php echo esc_html__('If enabled, users must be logged in to access download links', 'secure-fluentform-uploads'); ?></span>
+                </div>
             </div>
         </div>
 

@@ -234,6 +234,8 @@ class SFFU_Admin {
                 : 'hours';
         }
 
+        $sanitized['require_login_for_links'] = isset($input['require_login_for_links']);
+
         if (isset($input['chunk_size'])) {
             $sanitized['chunk_size'] = absint($input['chunk_size']);
         }
@@ -504,6 +506,7 @@ class SFFU_Admin {
             'link_expiry_enabled' => false,
             'link_expiry_interval' => 24,
             'link_expiry_unit' => 'hours',
+            'require_login_for_links' => false,
             'cleanup_enabled' => true,
             'cleanup_interval' => 30,
             'cleanup_unit' => 'days',

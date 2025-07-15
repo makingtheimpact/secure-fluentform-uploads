@@ -554,18 +554,25 @@ class SFFU_Core {
     public function handle_download() {
         // Get allowed roles
         $allowed_roles = get_option('sffu_allowed_roles', array('administrator'));
-        
-        // Check if user has any of the allowed roles
+        $settings      = get_option('sffu_settings', array());
+
+        // Check if login is required for download links
+        $require_login = !empty($settings['require_login_for_links']);
+
         $user = wp_get_current_user();
         $has_permission = false;
-        
-        foreach ($allowed_roles as $role) {
-            if (in_array($role, $user->roles)) {
-                $has_permission = true;
-                break;
+
+        if (!$require_login) {
+            $has_permission = true; // public access allowed
+        } else {
+            foreach ($allowed_roles as $role) {
+                if (in_array($role, $user->roles)) {
+                    $has_permission = true;
+                    break;
+                }
             }
         }
-        
+
         if (!$has_permission) {
             wp_die('Unauthorized access', 'Security Error', array('response' => 403));
         }
